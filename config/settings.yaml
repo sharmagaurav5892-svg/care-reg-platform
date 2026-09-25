@@ -1,0 +1,38 @@
+# Non-secret settings. Secrets go in .env (see .env.example), never here.
+
+project:
+  name: care-reg-platform
+  env: dev                      # dev | prod
+
+lakehouse:
+  mode: local                   # local | fabric
+  local_root: ./data/lakehouse
+  landing_root: ./data/landing
+  fabric_root: null             # set to the OneLake abfss:// Tables path in fabric mode
+
+chunking:
+  target_tokens: 600
+  overlap_tokens: 80
+  min_tokens: 50
+  max_tokens: 1200
+  tokenizer: cl100k_base
+
+models:
+  chat_deployment: gpt-4.1-mini
+  embedding_deployment: text-embedding-3-small
+  embedding_dim: 1536
+
+graph:
+  entity_types: [Regulation, Section, Requirement, HomeType, CareService, Role, Penalty, Authority]
+  relationship_types: [CONTAINS, REQUIRES, APPLIES_TO, REFERENCES, ENFORCED_BY, PENALIZED_BY, RESPONSIBLE_FOR]
+  extraction_prompt_version: extract-v1
+
+cost_guardrails:
+  monthly_budget_usd: 20
+  max_cost_per_run_usd: 3
+  alert_at_percent: [50, 80, 100]
+
+# USD per 1M tokens. Update from the Azure pricing page before each release.
+pricing:
+  gpt-4.1-mini:            {input: 0.40, output: 1.60}
+  text-embedding-3-small:  {input: 0.02, output: 0.0}

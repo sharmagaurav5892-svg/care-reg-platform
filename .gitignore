@@ -1,0 +1,21 @@
+# secrets
+.env
+
+# data never goes to git (docs/02 section 4)
+data/landing/*
+data/lakehouse/*
+!data/landing/.gitkeep
+!data/lakehouse/.gitkeep
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# editors / os
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

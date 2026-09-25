@@ -1,0 +1,198 @@
+# Data quality rules. The DQ engine (src/careplatform/dq) reads this file.
+# severity:
+#   critical -> the load fails and nothing is promoted
+#   warning  -> logged to ops.dq_results, load continues
+# check types the engine supports:
+#   not_null, unique, min_value, max_value, allowed_values,
+#   row_count_min, ratio_min, ratio_max, foreign_key, custom
+
+allowed_severities: [critical, warning]
+allowed_dimensions: [completeness, validity, uniqueness, consistency, timeliness, accuracy]
+
+rules:
+
+  # ---------------- BRONZE ----------------
+  - id: DQ-B-001
+    table: bronze.raw_documents
+    dimension: uniqueness
+    severity: critical
+    check: unique
+    column: doc_id
+    description: The same file (by content hash) must never be registered twice.
+
+  - id: DQ-B-002
+    table: bronze.raw_documents
+    dimension: validity
+    severity: critical
+    check: min_value
+    column: file_size_bytes
+    threshold: 1
+    description: Empty files are rejected.
+
+  - id: DQ-B-003
+    table: bronze.raw_documents
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: doc_type
+    values: [act, regulation, inspection_report]
+    description: Every file must map to a known document type.
+
+  - id: DQ-B-004
+    table: bronze.raw_documents
+    dimension: consistency
+    severity: critical
+    check: custom
+    column: source_id
+    description: Every source_id must exist in config/sources.yaml and be approved.
+
+  # ---------------- SILVER ----------------
+  - id: DQ-S-001
+    table: silver.document_pages
+    dimension: completeness
+    severity: warning
+    check: ratio_min
+    expression: char_count > 0
+    threshold: 0.95
+    description: At least 95 percent of pages should yield text. Lower usually means scanned PDFs that need OCR.
+
+  - id: DQ-S-002
+    table: silver.chunks
+    dimension: completeness
+    severity: critical
+    check: not_null
+    column: text
+    description: No empty chunks.
+
+  - id: DQ-S-003
+    table: silver.chunks
+    dimension: validity
+    severity: warning
+    check: ratio_min
+    expression: token_count BETWEEN 50 AND 1200
+    threshold: 0.98
+    description: Chunks should fall in the target size band. Outliers hurt retrieval.
+
+  - id: DQ-S-004
+    table: silver.chunks
+    dimension: consistency
+    severity: critical
+    check: foreign_key
+    column: doc_id
+    references: bronze.raw_documents.doc_id
+    description: Every chunk must trace back to a registered file.
+
+  - id: DQ-S-005
+    table: silver.chunks
+    dimension: uniqueness
+    severity: warning
+    check: ratio_max
+    expression: duplicate text_hash
+    threshold: 0.05
+    description: Duplicate chunk text above 5 percent points to repeated headers or a chunking bug.
+
+  - id: DQ-S-006
+    table: silver.chunks
+    dimension: validity
+    severity: warning
+    check: ratio_max
+    expression: pii_flag = true
+    threshold: 0.01
+    description: PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold.
+
+  # ---------------- GOLD ----------------
+  - id: DQ-G-001
+    table: gold.chunk_embeddings
+    dimension: completeness
+    severity: critical
+    check: ratio_min
+    expression: every non-PII chunk in silver.chunks has an embedding
+    threshold: 1.0
+    description: Missing embeddings mean silently missing answers.
+
+  - id: DQ-G-002
+    table: gold.chunk_embeddings
+    dimension: validity
+    severity: critical
+    check: custom
+    column: embedding_dim
+    description: Vector length must match the configured embedding model.
+
+  - id: DQ-G-003
+    table: gold.entities
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: entity_type
+    values: [Regulation, Section, Requirement, HomeType, CareService, Role, Penalty, Authority]
+    description: The LLM must stay inside the entity schema. Anything else is a prompt problem.
+
+  - id: DQ-G-004
+    table: gold.relationships
+    dimension: consistency
+    severity: critical
+    check: foreign_key
+    column: src_entity_id
+    references: gold.entities.entity_id
+    description: No relationships pointing at entities that do not exist.
+
+  - id: DQ-G-005
+    table: gold.relationships
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: rel_type
+    values: [CONTAINS, REQUIRES, APPLIES_TO, REFERENCES, ENFORCED_BY, PENALIZED_BY, RESPONSIBLE_FOR]
+    description: Relationship types must stay inside the graph schema.
+
+  - id: DQ-G-006
+    table: gold.llm_call_log
+    dimension: validity
+    severity: warning
+    check: min_value
+    column: cost_usd
+    threshold: 0
+    description: Negative cost means a pricing config error.
+
+  - id: DQ-G-007
+    table: gold.eval_questions
+    dimension: completeness
+    severity: critical
+    check: custom
+    column: expected_sources
+    description: Every gold question must list at least one supporting source.
+
+  - id: DQ-G-008
+    table: gold.eval_results
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: judge_score
+    values: [1, 2, 3, 4, 5, null]
+    description: Judge scores must be on the 1 to 5 scale. Anything else means the judge output was not parsed.
+
+  - id: DQ-G-009
+    table: gold.eval_results
+    dimension: consistency
+    severity: critical
+    check: foreign_key
+    column: question_id
+    references: gold.eval_questions.question_id
+    description: Every result must belong to a known gold question.
+
+  # ---------------- OPS ----------------
+  - id: DQ-O-002
+    table: ops.dq_results
+    dimension: consistency
+    severity: critical
+    check: custom
+    column: rule_id
+    description: Every rule_id logged must exist in config/dq_rules.yaml. Catches renamed or deleted rules.
+
+  - id: DQ-O-001
+    table: ops.run_log
+    dimension: timeliness
+    severity: warning
+    check: custom
+    column: status
+    description: No run should sit in RUNNING for more than 2 hours. Stuck runs get flagged.

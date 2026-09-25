@@ -1,0 +1,73 @@
+# Approved source register. A file can only be ingested if its source_id is here
+# with status: approved. Adding a source is a Governance Council decision
+# (docs/00_governance_charter.md section 6).
+#
+# URLs are the official landing pages. Exact download links are confirmed at
+# ingestion time (step 2) and written to bronze.raw_documents.source_url.
+
+sources:
+
+  - source_id: on_rha_2010
+    title: Retirement Homes Act, 2010, S.O. 2010, c. 11
+    publisher: Government of Ontario (e-Laws)
+    url: https://www.ontario.ca/laws/statute/10r11
+    doc_type: act
+    jurisdiction: ON
+    classification: Public
+    license_note: Ontario e-Laws terms of use apply. Verify before any redistribution.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-24
+
+  - source_id: on_oreg_166_11
+    title: O. Reg. 166/11 General (under the Retirement Homes Act, 2010)
+    publisher: Government of Ontario (e-Laws)
+    url: https://www.ontario.ca/laws/regulation/110166
+    doc_type: regulation
+    jurisdiction: ON
+    classification: Public
+    license_note: Ontario e-Laws terms of use apply. Verify before any redistribution.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-24
+
+  - source_id: on_fltca_2021
+    title: Fixing Long-Term Care Act, 2021, S.O. 2021, c. 39, Sched. 1
+    publisher: Government of Ontario (e-Laws)
+    url: https://www.ontario.ca/laws/statute/21f39
+    doc_type: act
+    jurisdiction: ON
+    classification: Public
+    license_note: Ontario e-Laws terms of use apply. Verify before any redistribution.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-24
+
+  - source_id: on_oreg_246_22
+    title: O. Reg. 246/22 General (under the Fixing Long-Term Care Act, 2021)
+    publisher: Government of Ontario (e-Laws)
+    url: https://www.ontario.ca/laws/regulation/r22246
+    doc_type: regulation
+    jurisdiction: ON
+    classification: Public
+    license_note: Ontario e-Laws terms of use apply. Verify before any redistribution.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-24
+
+  - source_id: on_ltc_inspection_reports
+    title: Public long-term care home inspection reports (sample)
+    publisher: Ontario Ministry of Long-Term Care
+    url: https://publicreporting.ltchomes.net   # confirm exact report links in step 2
+    doc_type: inspection_report
+    jurisdiction: ON
+    classification: Public
+    license_note: Public reports. May mention individuals; PII scan (DQ-S-006) is mandatory.
+    redistribute_raw: false
+    status: pending_review
+    approved_by: null
+    approved_on: null

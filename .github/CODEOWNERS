@@ -1,0 +1,7 @@
+# In a team, each path would map to a different group.
+# Solo build: all paths owned by the platform owner.
+/config/catalog.yaml     @gaurav
+/config/dq_rules.yaml    @gaurav
+/config/sources.yaml     @gaurav
+/docs/                   @gaurav
+/src/                    @gaurav

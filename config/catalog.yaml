@@ -1,0 +1,242 @@
+# Machine-readable data catalog. This file is the source of truth.
+# docs/03_data_catalog.md is generated from it:
+#   python -m careplatform.governance.render_catalog
+# tests/test_governance_config.py fails if any table is missing required fields.
+
+allowed_classifications: [Public, Internal, Confidential]
+allowed_layers: [bronze, silver, gold, ops]
+
+domains:
+  regulations:     {data_owner: Regulations Data Owner,  data_steward: Regulations Data Steward}
+  ai_operations:   {data_owner: AI Operations Owner,     data_steward: AI Operations Steward}
+  evaluation:      {data_owner: Evaluation Owner,        data_steward: Evaluator}
+  platform:        {data_owner: Platform Owner,          data_steward: Data Engineer}
+
+tables:
+
+  # ---------------- BRONZE ----------------
+  - name: bronze.raw_documents
+    layer: bronze
+    domain: regulations
+    description: File register. One row per unique source file landed. Raw bytes stay in data/landing.
+    classification: Public
+    retention_days: 1825
+    grain: one row per unique file (by content hash)
+    primary_key: [doc_id]
+    write_mode: append
+    columns:
+      - {name: doc_id,          type: string,    nullable: false, description: SHA-256 of file bytes. Same file is never loaded twice.}
+      - {name: source_id,       type: string,    nullable: false, description: Key into config/sources.yaml}
+      - {name: file_name,       type: string,    nullable: false, description: File name as saved in landing}
+      - {name: landing_path,    type: string,    nullable: false, description: Relative path under data/landing}
+      - {name: source_url,      type: string,    nullable: true,  description: Where the file was downloaded from}
+      - {name: doc_type,        type: string,    nullable: false, description: act | regulation | inspection_report}
+      - {name: jurisdiction,    type: string,    nullable: false, description: Always ON for this build}
+      - {name: mime_type,       type: string,    nullable: false, description: Detected file type}
+      - {name: file_size_bytes, type: long,      nullable: false, description: Size on disk}
+      - {name: page_count,      type: int,       nullable: true,  description: Pages in the PDF, null for HTML}
+      - {name: ingested_at,     type: timestamp, nullable: false, description: UTC time the row was written}
+      - {name: load_id,         type: string,    nullable: false, description: run_id from ops.run_log that loaded this file}
+
+  # ---------------- SILVER ----------------
+  - name: silver.document_pages
+    layer: silver
+    domain: regulations
+    description: Extracted text per page, before chunking.
+    classification: Public
+    retention_days: 365
+    grain: one row per document page
+    primary_key: [doc_id, page_no]
+    write_mode: overwrite_partition
+    columns:
+      - {name: doc_id,            type: string,    nullable: false, description: FK to bronze.raw_documents}
+      - {name: page_no,           type: int,       nullable: false, description: 1-based page number}
+      - {name: text,              type: string,    nullable: true,  description: Extracted text}
+      - {name: char_count,        type: int,       nullable: false, description: Length of text}
+      - {name: extraction_method, type: string,    nullable: false, description: pypdf | html}
+      - {name: load_id,           type: string,    nullable: false, description: run_id that produced the row}
+
+  - name: silver.chunks
+    layer: silver
+    domain: regulations
+    description: Cleaned text chunks with section references. The unit everything downstream works on.
+    classification: Public
+    retention_days: 365
+    grain: one row per chunk
+    primary_key: [chunk_id]
+    write_mode: overwrite_partition
+    columns:
+      - {name: chunk_id,     type: string,    nullable: false, description: "doc_id + chunk_index hash"}
+      - {name: doc_id,       type: string,    nullable: false, description: FK to bronze.raw_documents}
+      - {name: chunk_index,  type: int,       nullable: false, description: Order within the document}
+      - {name: page_start,   type: int,       nullable: false, description: First page the chunk covers}
+      - {name: page_end,     type: int,       nullable: false, description: Last page the chunk covers}
+      - {name: section_ref,  type: string,    nullable: true,  description: "Section number if detected, e.g. s. 27(1)"}
+      - {name: text,         type: string,    nullable: false, description: Chunk text}
+      - {name: token_count,  type: int,       nullable: false, description: Tokens by tiktoken cl100k_base}
+      - {name: text_hash,    type: string,    nullable: false, description: SHA-256 of normalized text, for duplicate checks}
+      - {name: pii_flag,     type: boolean,   nullable: false, description: True if PII scan found something. Excluded from gold.}
+      - {name: load_id,      type: string,    nullable: false, description: run_id that produced the row}
+
+  # ---------------- GOLD ----------------
+  - name: gold.chunk_embeddings
+    layer: gold
+    domain: regulations
+    description: Vector embedding per chunk.
+    classification: Public
+    retention_days: 365
+    grain: one row per chunk per embedding model
+    primary_key: [chunk_id, embedding_model]
+    write_mode: merge
+    columns:
+      - {name: chunk_id,        type: string,        nullable: false, description: FK to silver.chunks}
+      - {name: embedding_model, type: string,        nullable: false, description: Deployment name and version}
+      - {name: embedding_dim,   type: int,           nullable: false, description: Vector length}
+      - {name: vector,          type: array<float>,  nullable: false, description: The embedding}
+      - {name: load_id,         type: string,        nullable: false, description: run_id that produced the row}
+
+  - name: gold.entities
+    layer: gold
+    domain: regulations
+    description: Entities extracted from chunks by the LLM using a fixed schema.
+    classification: Public
+    retention_days: 365
+    grain: one row per entity mention per chunk
+    primary_key: [entity_id, source_chunk_id]
+    write_mode: merge
+    columns:
+      - {name: entity_id,       type: string, nullable: false, description: Hash of entity_type + normalized_name}
+      - {name: entity_type,     type: string, nullable: false, description: Must be in the allowed entity schema}
+      - {name: name,            type: string, nullable: false, description: As written in the text}
+      - {name: normalized_name, type: string, nullable: false, description: Lower case, trimmed, used for matching}
+      - {name: source_chunk_id, type: string, nullable: false, description: FK to silver.chunks. Record-level lineage.}
+      - {name: extraction_model,type: string, nullable: false, description: Model deployment used}
+      - {name: prompt_version,  type: string, nullable: false, description: Version of the extraction prompt}
+      - {name: load_id,         type: string, nullable: false, description: run_id that produced the row}
+
+  - name: gold.relationships
+    layer: gold
+    domain: regulations
+    description: Relationships between entities extracted from chunks.
+    classification: Public
+    retention_days: 365
+    grain: one row per relationship mention per chunk
+    primary_key: [rel_id]
+    write_mode: merge
+    columns:
+      - {name: rel_id,          type: string, nullable: false, description: Hash of src + type + dst + chunk}
+      - {name: src_entity_id,   type: string, nullable: false, description: FK to gold.entities}
+      - {name: rel_type,        type: string, nullable: false, description: Must be in the allowed relationship schema}
+      - {name: dst_entity_id,   type: string, nullable: false, description: FK to gold.entities}
+      - {name: source_chunk_id, type: string, nullable: false, description: FK to silver.chunks}
+      - {name: prompt_version,  type: string, nullable: false, description: Version of the extraction prompt}
+      - {name: load_id,         type: string, nullable: false, description: run_id that produced the row}
+
+  - name: gold.llm_call_log
+    layer: gold
+    domain: ai_operations
+    description: One row per model call through the LLM gateway. No raw prompt text by default (ADR-004).
+    classification: Internal
+    retention_days: 180
+    grain: one row per model call attempt
+    primary_key: [call_id]
+    write_mode: append
+    columns:
+      - {name: call_id,           type: string,    nullable: false, description: UUID}
+      - {name: called_at,         type: timestamp, nullable: false, description: UTC}
+      - {name: app,               type: string,    nullable: false, description: rag | extraction | judge}
+      - {name: provider,          type: string,    nullable: false, description: azure_openai | fallback}
+      - {name: model,             type: string,    nullable: false, description: Deployment name}
+      - {name: prompt_tokens,     type: int,       nullable: true,  description: From the API response}
+      - {name: completion_tokens, type: int,       nullable: true,  description: From the API response}
+      - {name: latency_ms,        type: int,       nullable: false, description: Wall clock time}
+      - {name: status,            type: string,    nullable: false, description: ok | error | timeout}
+      - {name: error_type,        type: string,    nullable: true,  description: Error class if status is not ok}
+      - {name: retry_count,       type: int,       nullable: false, description: Retries before this result}
+      - {name: fallback_used,     type: boolean,   nullable: false, description: True if a fallback provider answered}
+      - {name: cost_usd,          type: double,    nullable: false, description: Calculated from token counts and config/pricing}
+      - {name: request_hash,      type: string,    nullable: false, description: SHA-256 of redacted prompt. Lets you spot repeats without storing text.}
+
+  - name: gold.eval_questions
+    layer: gold
+    domain: evaluation
+    description: Hand-written gold question set with expected answers and sources.
+    classification: Internal
+    retention_days: 1825
+    grain: one row per question per version
+    primary_key: [question_id, version]
+    write_mode: append
+    columns:
+      - {name: question_id,      type: string,        nullable: false, description: Stable ID like Q-001}
+      - {name: version,          type: int,           nullable: false, description: Bumped when the question or answer changes}
+      - {name: question,         type: string,        nullable: false, description: The question}
+      - {name: expected_answer,  type: string,        nullable: false, description: Reference answer}
+      - {name: expected_sources, type: array<string>, nullable: false, description: doc_id and section refs that support the answer}
+      - {name: category,         type: string,        nullable: false, description: lookup | relationship | multi_hop | negative}
+      - {name: author,           type: string,        nullable: false, description: Who wrote it}
+      - {name: created_at,       type: timestamp,     nullable: false, description: UTC}
+
+  - name: gold.eval_results
+    layer: gold
+    domain: evaluation
+    description: Judge scores and human labels per question per pipeline run.
+    classification: Internal
+    retention_days: 1825
+    grain: one row per question per eval run per pipeline variant
+    primary_key: [eval_run_id, question_id, variant]
+    write_mode: append
+    columns:
+      - {name: eval_run_id,          type: string,        nullable: false, description: FK to ops.run_log}
+      - {name: question_id,          type: string,        nullable: false, description: FK to gold.eval_questions}
+      - {name: variant,              type: string,        nullable: false, description: vector | graph | hybrid}
+      - {name: answer,               type: string,        nullable: false, description: What the app answered}
+      - {name: retrieved_chunk_ids,  type: array<string>, nullable: false, description: What the retriever returned}
+      - {name: judge_score,          type: int,           nullable: true,  description: 1 to 5 from the judge}
+      - {name: judge_model,          type: string,        nullable: true,  description: Model used as judge}
+      - {name: judge_prompt_version, type: string,        nullable: true,  description: Version of the judge prompt}
+      - {name: human_label,          type: int,           nullable: true,  description: 1 to 5 from a person, for calibration}
+      - {name: latency_ms,           type: int,           nullable: false, description: End to end answer time}
+      - {name: cost_usd,             type: double,        nullable: false, description: Total cost for this answer}
+
+  # ---------------- OPS ----------------
+  - name: ops.run_log
+    layer: ops
+    domain: platform
+    description: One row per pipeline run. Ties every table back to the code and config that built it.
+    classification: Internal
+    retention_days: 1825
+    grain: one row per run
+    primary_key: [run_id]
+    write_mode: append
+    columns:
+      - {name: run_id,        type: string,    nullable: false, description: UUID. Written into load_id on every row the run touches.}
+      - {name: pipeline,      type: string,    nullable: false, description: e.g. bronze_ingest, silver_chunk}
+      - {name: started_at,    type: timestamp, nullable: false, description: UTC}
+      - {name: ended_at,      type: timestamp, nullable: true,  description: UTC, null while running}
+      - {name: status,        type: string,    nullable: false, description: RUNNING | SUCCEEDED | FAILED}
+      - {name: rows_in,       type: long,      nullable: true,  description: Rows read}
+      - {name: rows_out,      type: long,      nullable: true,  description: Rows written}
+      - {name: git_commit,    type: string,    nullable: true,  description: Short commit hash of the code that ran}
+      - {name: config_hash,   type: string,    nullable: false, description: Hash of the config files at run time}
+      - {name: error_message, type: string,    nullable: true,  description: Set when status is FAILED}
+
+  - name: ops.dq_results
+    layer: ops
+    domain: platform
+    description: One row per DQ rule evaluated per run.
+    classification: Internal
+    retention_days: 1825
+    grain: one row per rule per run
+    primary_key: [run_id, rule_id]
+    write_mode: append
+    columns:
+      - {name: run_id,         type: string,    nullable: false, description: FK to ops.run_log}
+      - {name: rule_id,        type: string,    nullable: false, description: FK to config/dq_rules.yaml}
+      - {name: table_name,     type: string,    nullable: false, description: Table checked}
+      - {name: dimension,      type: string,    nullable: false, description: completeness | validity | uniqueness | consistency | timeliness | accuracy}
+      - {name: severity,       type: string,    nullable: false, description: critical | warning}
+      - {name: status,         type: string,    nullable: false, description: pass | fail}
+      - {name: observed_value, type: double,    nullable: true,  description: What the check measured}
+      - {name: threshold,      type: double,    nullable: true,  description: What it was compared to}
+      - {name: failed_rows,    type: long,      nullable: true,  description: Rows that broke the rule}
+      - {name: checked_at,     type: timestamp, nullable: false, description: UTC}

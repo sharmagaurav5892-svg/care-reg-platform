@@ -82,6 +82,7 @@ python -m venv .venv
 .venv\Scripts\activate          # Windows
 source .venv/bin/activate       # macOS / Linux
 pip install -r requirements.txt
+pip install -e .                # makes `python -m careplatform...` work
 copy .env.example .env          # Windows  (cp on macOS / Linux), then fill in keys
 pytest                          # governance checks must pass before anything runs
 ```

@@ -18,7 +18,7 @@ REQUIRED_TABLE_FIELDS = [
 REQUIRED_COLUMN_FIELDS = ["name", "type", "nullable", "description"]
 REQUIRED_RULE_FIELDS = ["id", "table", "dimension", "severity", "check", "description"]
 REQUIRED_SOURCE_FIELDS = [
-    "source_id", "title", "publisher", "url", "doc_type", "jurisdiction",
+    "source_id", "connector", "repo_path", "title", "publisher", "url", "doc_type", "jurisdiction",
     "classification", "license_note", "redistribute_raw", "status",
 ]
 # every row in these layers must carry a load_id back to ops.run_log
@@ -98,6 +98,15 @@ def check_dq_rules(rules: dict | None = None, cat: dict | None = None) -> list[s
         col = r.get("column")
         if col and col not in tables[table]:
             problems.append(f"{rid}: column {col} is not in {table}")
+        needs = {
+            "ratio_min": ["expression", "threshold"], "ratio_max": ["expression", "threshold"],
+            "min_value": ["column", "threshold"], "max_value": ["column", "threshold"],
+            "row_count_min": ["threshold"], "allowed_values": ["column", "values"],
+            "unique": ["column"], "not_null": ["column"], "foreign_key": ["column", "references"],
+        }.get(r.get("check"), [])
+        for field in needs:
+            if field not in r:
+                problems.append(f"{rid}: check {r.get('check')} needs {field}")
         if r.get("check") == "foreign_key":
             ref = r.get("references", "")
             ref_table, _, ref_col = ref.rpartition(".")
@@ -116,7 +125,9 @@ def check_sources(src: dict | None = None) -> list[str]:
     src = src or config.sources()
     problems: list[str] = []
     allowed_doc_types = {"act", "regulation", "inspection_report"}
+    root = config.settings()["ingestion"]["github"]["root_path"]
     ids: set[str] = set()
+    paths: set[str] = set()
     for s in src["sources"]:
         sid = s.get("source_id", "<no id>")
         for field in REQUIRED_SOURCE_FIELDS:
@@ -125,6 +136,16 @@ def check_sources(src: dict | None = None) -> list[str]:
         if sid in ids:
             problems.append(f"{sid}: duplicate source_id")
         ids.add(sid)
+        # YAML reads bare ON/OFF/YES/NO as booleans. Every text field must really be text.
+        for field in ("source_id", "jurisdiction", "doc_type", "repo_path", "status"):
+            if field in s and not isinstance(s[field], str):
+                problems.append(f"{sid}: {field} must be a string, got {s[field]!r} (quote it in YAML)")
+        rp = s.get("repo_path", "")
+        if not rp.startswith(root) or not rp.endswith("/"):
+            problems.append(f"{sid}: repo_path must sit under {root} and end with /")
+        if rp in paths:
+            problems.append(f"{sid}: repo_path {rp} is used by another source")
+        paths.add(rp)
         if s.get("doc_type") not in allowed_doc_types:
             problems.append(f"{sid}: doc_type {s.get('doc_type')!r} not allowed")
         if s.get("classification") != "Public":

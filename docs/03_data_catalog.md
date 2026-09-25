@@ -16,7 +16,7 @@
 
 | Table | Layer | Domain | Classification | Retention (days) | Grain | DQ rules |
 |-------|-------|--------|----------------|------------------|-------|----------|
-| [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 4 |
+| [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 6 |
 | [silver.document_pages](#silverdocument_pages) | silver | regulations | Public | 365 | one row per document page | 1 |
 | [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk | 5 |
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model | 2 |
@@ -27,10 +27,12 @@
 | [gold.eval_results](#goldeval_results) | gold | evaluation | Internal | 1825 | one row per question per eval run per pipeline variant | 2 |
 | [ops.run_log](#opsrun_log) | ops | platform | Internal | 1825 | one row per run | 1 |
 | [ops.dq_results](#opsdq_results) | ops | platform | Internal | 1825 | one row per rule per run | 1 |
+| [ops.api_call_log](#opsapi_call_log) | ops | platform | Internal | 180 | one row per HTTP attempt | 1 |
+| [ops.watermarks](#opswatermarks) | ops | platform | Internal | 1825 | one row per source system and scope | 1 |
 
 ## bronze.raw_documents
 
-File register. One row per unique source file landed. Raw bytes stay in data/landing.
+File register. One row per unique source file pulled from the GitHub source repo. Raw bytes stay in data/landing.
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
@@ -42,16 +44,19 @@ File register. One row per unique source file landed. Raw bytes stay in data/lan
 
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
-| doc_id | string | no | SHA-256 of file bytes. Same file is never loaded twice. |
+| doc_id | string | no | SHA-256 of file bytes. Same content is never loaded twice. |
 | source_id | string | no | Key into config/sources.yaml |
-| file_name | string | no | File name as saved in landing |
-| landing_path | string | no | Relative path under data/landing |
-| source_url | string | yes | Where the file was downloaded from |
+| source_system | string | no | Connector that fetched it (github) |
+| file_name | string | no | File name |
+| repo_path | string | no | Path of the file in the source repo |
+| landing_path | string | no | Relative path under data/landing where the bytes were saved |
+| source_url | string | no | GitHub link to the exact commit and file that was loaded |
+| commit_sha | string | no | Repo commit the file was read at |
+| git_blob_sha | string | no | Git content hash. Used to skip unchanged files without downloading them. |
 | doc_type | string | no | act | regulation | inspection_report |
 | jurisdiction | string | no | Always ON for this build |
-| mime_type | string | no | Detected file type |
-| file_size_bytes | long | no | Size on disk |
-| page_count | int | yes | Pages in the PDF |
+| mime_type | string | no | Guessed from the file extension |
+| file_size_bytes | long | no | Size in bytes |
 | ingested_at | timestamp | no | UTC time the row was written |
 | load_id | string | no | run_id from ops.run_log that loaded this file |
 
@@ -63,6 +68,8 @@ File register. One row per unique source file landed. Raw bytes stay in data/lan
 | DQ-B-002 | critical | validity | Empty files are rejected. |
 | DQ-B-003 | critical | validity | Every file must map to a known document type. |
 | DQ-B-004 | critical | consistency | Every source_id must exist in config/sources.yaml and be approved. |
+| DQ-B-005 | critical | accuracy | The landing file must exist and still hash to its doc_id. Bronze promises we can rebuild from these files. |
+| DQ-B-006 | critical | completeness | Every file must record the exact commit it was read at, or we lose lineage to the source repo. |
 
 ## silver.document_pages
 
@@ -370,3 +377,62 @@ One row per DQ rule evaluated per run.
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
 | DQ-O-002 | critical | consistency | Every rule_id logged must exist in config/dq_rules.yaml. Catches renamed or deleted rules. |
+
+## ops.api_call_log
+
+One row per HTTP attempt made by any connector, including retries. Auth headers are never logged.
+
+- **Owner:** Platform Owner  
+- **Steward:** Data Engineer  
+- **Classification:** Internal  
+- **Retention:** 180 days  
+- **Grain:** one row per HTTP attempt  
+- **Primary key:** call_id  
+- **Write mode:** append
+
+| Column | Type | Nullable | Description |
+|--------|------|:--------:|-------------|
+| call_id | string | no | UUID |
+| run_id | string | no | FK to ops.run_log |
+| connector | string | no | e.g. github |
+| method | string | no | HTTP method |
+| endpoint | string | no | Path without host or query string |
+| status_code | int | yes | HTTP status |
+| attempt | int | no | 1 for the first try |
+| latency_ms | int | no | Time for this attempt |
+| response_bytes | long | yes | Size of the response body |
+| rate_limit_remaining | int | yes | Requests left in the current rate limit window |
+| error_type | string | yes | Exception name or HTTPnnn when the attempt failed |
+| called_at | timestamp | no | UTC |
+
+**Data quality rules**
+
+| Rule | Severity | Dimension | Description |
+|------|----------|-----------|-------------|
+| DQ-O-003 | warning | validity | More than 10 percent failed calls means the source API is struggling. Retries hide it, this surfaces it. |
+
+## ops.watermarks
+
+High-water mark per source for incremental loads. Only moved after a successful, DQ-passed load.
+
+- **Owner:** Platform Owner  
+- **Steward:** Data Engineer  
+- **Classification:** Internal  
+- **Retention:** 1825 days  
+- **Grain:** one row per source system and scope  
+- **Primary key:** source_system, scope  
+- **Write mode:** merge
+
+| Column | Type | Nullable | Description |
+|--------|------|:--------:|-------------|
+| source_system | string | no | e.g. github |
+| scope | string | no | What the mark covers |
+| watermark_value | string | no | Last successfully loaded position (commit SHA for GitHub) |
+| updated_at | timestamp | no | UTC |
+| load_id | string | no | run_id that moved the mark |
+
+**Data quality rules**
+
+| Rule | Severity | Dimension | Description |
+|------|----------|-----------|-------------|
+| DQ-O-004 | critical | completeness | A blank watermark would make the next run reload everything or skip everything. |

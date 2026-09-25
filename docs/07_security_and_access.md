@@ -7,12 +7,14 @@
 | Azure OpenAI key | `.env` (git-ignored), exception EX-001 | Azure Key Vault, read via managed identity |
 | Neo4j password | `.env` | Azure Key Vault |
 | Fallback provider key | `.env` | Azure Key Vault |
+| GitHub token | `.env` | Azure Key Vault |
 
 Rules:
 
 - No secret in code, config YAML, notebooks or commit history.
 - GitHub secret scanning and push protection turned on for the repo.
 - Keys rotated at the end of the build, and any time one might have leaked.
+- The GitHub token is a fine-grained personal access token: one repo only, Contents read-only, 90 day expiry. A classic token with full `repo` scope is not allowed.
 - Where a service supports keyless auth (Entra ID for Azure OpenAI and OneLake), use that in Fabric mode instead of keys.
 
 ## 2. Roles and access
@@ -41,6 +43,7 @@ In Fabric mode these map to workspace roles (Admin, Member, Contributor, Viewer)
 | Event | Where recorded |
 |-------|----------------|
 | Every pipeline run | `ops.run_log` |
+| Every external API call and retry | `ops.api_call_log` |
 | Every model call | `gold.llm_call_log` |
 | Every config change | Git history and PRs |
 | Access changes | Fabric admin audit log (Fabric mode) |

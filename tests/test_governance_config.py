@@ -65,3 +65,10 @@ def test_non_public_source_is_caught():
 def test_config_hash_is_stable():
     assert config.config_hash() == config.config_hash()
     assert len(config.config_hash()) == 16
+
+
+def test_yaml_boolean_trap_is_caught():
+    """jurisdiction: ON (unquoted) loads as True. The validator must reject it."""
+    src = copy.deepcopy(config.sources())
+    src["sources"][0]["jurisdiction"] = True
+    assert any("must be a string" in p for p in validate.check_sources(src))

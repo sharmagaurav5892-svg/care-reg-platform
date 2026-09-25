@@ -10,6 +10,21 @@ lakehouse:
   landing_root: ./data/landing
   fabric_root: null             # set to the OneLake abfss:// Tables path in fabric mode
 
+ingestion:
+  github:
+    owner: "<your-github-username>"   # or set GITHUB_OWNER in .env
+    repo: care-reg-source-docs         # private repo holding the source files
+    branch: main
+    root_path: regulations/            # only files under here are considered
+  allowed_extensions: [.pdf, .html, .htm, .txt, .md]
+  max_file_size_mb: 50
+
+http:
+  timeout_seconds: 30
+  max_retries: 5
+  backoff_base_seconds: 1
+  max_rate_limit_wait_seconds: 900     # wait up to 15 min for a rate limit reset, then fail
+
 chunking:
   target_tokens: 600
   overlap_tokens: 80

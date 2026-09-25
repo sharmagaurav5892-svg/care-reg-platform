@@ -46,6 +46,22 @@ rules:
     column: source_id
     description: Every source_id must exist in config/sources.yaml and be approved.
 
+  - id: DQ-B-005
+    table: bronze.raw_documents
+    dimension: accuracy
+    severity: critical
+    check: custom
+    column: landing_path
+    description: The landing file must exist and still hash to its doc_id. Bronze promises we can rebuild from these files.
+
+  - id: DQ-B-006
+    table: bronze.raw_documents
+    dimension: completeness
+    severity: critical
+    check: not_null
+    column: commit_sha
+    description: Every file must record the exact commit it was read at, or we lose lineage to the source repo.
+
   # ---------------- SILVER ----------------
   - id: DQ-S-001
     table: silver.document_pages
@@ -86,8 +102,8 @@ rules:
     table: silver.chunks
     dimension: uniqueness
     severity: warning
-    check: ratio_max
-    expression: duplicate text_hash
+    check: custom
+    column: text_hash
     threshold: 0.05
     description: Duplicate chunk text above 5 percent points to repeated headers or a chunking bug.
 
@@ -105,8 +121,8 @@ rules:
     table: gold.chunk_embeddings
     dimension: completeness
     severity: critical
-    check: ratio_min
-    expression: every non-PII chunk in silver.chunks has an embedding
+    check: custom
+    column: chunk_id
     threshold: 1.0
     description: Missing embeddings mean silently missing answers.
 
@@ -196,3 +212,20 @@ rules:
     check: custom
     column: status
     description: No run should sit in RUNNING for more than 2 hours. Stuck runs get flagged.
+
+  - id: DQ-O-003
+    table: ops.api_call_log
+    dimension: validity
+    severity: warning
+    check: ratio_max
+    expression: status_code IS NULL OR status_code >= 500
+    threshold: 0.10
+    description: More than 10 percent failed calls means the source API is struggling. Retries hide it, this surfaces it.
+
+  - id: DQ-O-004
+    table: ops.watermarks
+    dimension: completeness
+    severity: critical
+    check: not_null
+    column: watermark_value
+    description: A blank watermark would make the next run reload everything or skip everything.

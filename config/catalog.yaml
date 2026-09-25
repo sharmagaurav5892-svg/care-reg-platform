@@ -18,23 +18,26 @@ tables:
   - name: bronze.raw_documents
     layer: bronze
     domain: regulations
-    description: File register. One row per unique source file landed. Raw bytes stay in data/landing.
+    description: File register. One row per unique source file pulled from the GitHub source repo. Raw bytes stay in data/landing.
     classification: Public
     retention_days: 1825
     grain: one row per unique file (by content hash)
     primary_key: [doc_id]
     write_mode: append
     columns:
-      - {name: doc_id,          type: string,    nullable: false, description: SHA-256 of file bytes. Same file is never loaded twice.}
+      - {name: doc_id,          type: string,    nullable: false, description: SHA-256 of file bytes. Same content is never loaded twice.}
       - {name: source_id,       type: string,    nullable: false, description: Key into config/sources.yaml}
-      - {name: file_name,       type: string,    nullable: false, description: File name as saved in landing}
-      - {name: landing_path,    type: string,    nullable: false, description: Relative path under data/landing}
-      - {name: source_url,      type: string,    nullable: true,  description: Where the file was downloaded from}
+      - {name: source_system,   type: string,    nullable: false, description: Connector that fetched it (github)}
+      - {name: file_name,       type: string,    nullable: false, description: File name}
+      - {name: repo_path,       type: string,    nullable: false, description: Path of the file in the source repo}
+      - {name: landing_path,    type: string,    nullable: false, description: Relative path under data/landing where the bytes were saved}
+      - {name: source_url,      type: string,    nullable: false, description: GitHub link to the exact commit and file that was loaded}
+      - {name: commit_sha,      type: string,    nullable: false, description: Repo commit the file was read at}
+      - {name: git_blob_sha,    type: string,    nullable: false, description: Git content hash. Used to skip unchanged files without downloading them.}
       - {name: doc_type,        type: string,    nullable: false, description: act | regulation | inspection_report}
       - {name: jurisdiction,    type: string,    nullable: false, description: Always ON for this build}
-      - {name: mime_type,       type: string,    nullable: false, description: Detected file type}
-      - {name: file_size_bytes, type: long,      nullable: false, description: Size on disk}
-      - {name: page_count,      type: int,       nullable: true,  description: Pages in the PDF, null for HTML}
+      - {name: mime_type,       type: string,    nullable: false, description: Guessed from the file extension}
+      - {name: file_size_bytes, type: long,      nullable: false, description: Size in bytes}
       - {name: ingested_at,     type: timestamp, nullable: false, description: UTC time the row was written}
       - {name: load_id,         type: string,    nullable: false, description: run_id from ops.run_log that loaded this file}
 
@@ -240,3 +243,42 @@ tables:
       - {name: threshold,      type: double,    nullable: true,  description: What it was compared to}
       - {name: failed_rows,    type: long,      nullable: true,  description: Rows that broke the rule}
       - {name: checked_at,     type: timestamp, nullable: false, description: UTC}
+
+  - name: ops.api_call_log
+    layer: ops
+    domain: platform
+    description: One row per HTTP attempt made by any connector, including retries. Auth headers are never logged.
+    classification: Internal
+    retention_days: 180
+    grain: one row per HTTP attempt
+    primary_key: [call_id]
+    write_mode: append
+    columns:
+      - {name: call_id,              type: string,    nullable: false, description: UUID}
+      - {name: run_id,               type: string,    nullable: false, description: FK to ops.run_log}
+      - {name: connector,            type: string,    nullable: false, description: e.g. github}
+      - {name: method,               type: string,    nullable: false, description: HTTP method}
+      - {name: endpoint,             type: string,    nullable: false, description: Path without host or query string}
+      - {name: status_code,          type: int,       nullable: true,  description: HTTP status, null if the connection failed}
+      - {name: attempt,              type: int,       nullable: false, description: 1 for the first try, 2+ for retries}
+      - {name: latency_ms,           type: int,       nullable: false, description: Time for this attempt}
+      - {name: response_bytes,       type: long,      nullable: true,  description: Size of the response body}
+      - {name: rate_limit_remaining, type: int,       nullable: true,  description: Requests left in the current rate limit window}
+      - {name: error_type,           type: string,    nullable: true,  description: Exception name or HTTPnnn when the attempt failed}
+      - {name: called_at,            type: timestamp, nullable: false, description: UTC}
+
+  - name: ops.watermarks
+    layer: ops
+    domain: platform
+    description: High-water mark per source for incremental loads. Only moved after a successful, DQ-passed load.
+    classification: Internal
+    retention_days: 1825
+    grain: one row per source system and scope
+    primary_key: [source_system, scope]
+    write_mode: merge
+    columns:
+      - {name: source_system,   type: string,    nullable: false, description: e.g. github}
+      - {name: scope,           type: string,    nullable: false, description: What the mark covers, e.g. owner/repo@branch}
+      - {name: watermark_value, type: string,    nullable: false, description: Last successfully loaded position (commit SHA for GitHub)}
+      - {name: updated_at,      type: timestamp, nullable: false, description: UTC}
+      - {name: load_id,         type: string,    nullable: false, description: run_id that moved the mark}

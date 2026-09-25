@@ -1,6 +1,6 @@
 # CareReg Intelligence Platform
 
-A governed data and AI platform that turns Ontario seniors care regulations and public inspection reports into something you can actually ask questions of.
+A governed data and AI platform that turns Ontario seniors care regulations and public inspection reports into something you can actually ask questions of. Source documents come in through the GitHub REST API, with incremental loads, retries, rate limit handling and a full audit trail.
 
 It is built as three AI projects sitting on one shared, governed data foundation:
 
@@ -23,7 +23,7 @@ All source data is public. No employer data, no resident data, no personal infor
 
 ```mermaid
 flowchart LR
-    A[Public sources<br/>e-Laws, inspection reports] --> B[Bronze<br/>raw files + file register]
+    A[Private GitHub repo<br/>source documents] -->|GitHub REST API<br/>incremental| B[Bronze<br/>raw files + file register]
     B --> C[Silver<br/>pages, clean chunks]
     C --> D[Gold<br/>embeddings, entities,<br/>relationships, eval sets]
     D --> E[(Neo4j<br/>graph + vectors)]
@@ -61,6 +61,7 @@ This repo carries a full governance pack. In a solo portfolio build every role i
 | [09 Change management](docs/09_change_management.md) | Branching, PR checks, environments, releases |
 | [10 Cost management](docs/10_cost_management.md) | Budgets, alerts, unit costs, cost per answer |
 | [11 Risk register](docs/11_risk_register.md) | Known risks, likelihood, impact, controls |
+| [12 Integration standards](docs/12_integration_standards.md) | Rules every API connector follows: timeouts, retries, rate limits, watermarks |
 | [ADRs](docs/adr/) | Why each big decision was made |
 | [Runbooks](docs/runbooks/) | What to do when something breaks |
 
@@ -87,12 +88,21 @@ copy .env.example .env          # Windows  (cp on macOS / Linux), then fill in k
 pytest                          # governance checks must pass before anything runs
 ```
 
+Load the source documents (after setting up the source repo, see [source_repo_template/README.md](source_repo_template/README.md)):
+
+```bash
+python -m careplatform.ingestion.bronze_ingest     # incremental load from GitHub
+python -m careplatform.show                        # which tables have data
+python -m careplatform.show bronze.raw_documents   # look at one table
+python -m careplatform.show ops.api_call_log       # every API call, with retries
+```
+
 ## Build roadmap
 
 | Step | Deliverable |
 |------|-------------|
-| 1 | Repo foundation, governance pack, catalog and DQ rules as code |
-| 2 | Bronze ingestion: download sources, file register, run log |
+| 1 ✅ | Repo foundation, governance pack, catalog and DQ rules as code |
+| 2 ✅ | Bronze ingestion through the GitHub API: connector, watermarks, run log, API audit log, DQ gate |
 | 3 | Silver: PDF text extraction, cleaning, chunking, DQ checks |
 | 4 | Gold: embeddings, entity and relationship extraction |
 | 5 | Neo4j graph load and vector index |

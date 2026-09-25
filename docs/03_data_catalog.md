@@ -16,7 +16,7 @@
 
 | Table | Layer | Domain | Classification | Retention (days) | Grain | DQ rules |
 |-------|-------|--------|----------------|------------------|-------|----------|
-| [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 6 |
+| [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 8 |
 | [silver.document_pages](#silverdocument_pages) | silver | regulations | Public | 365 | one row per document page | 1 |
 | [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk | 5 |
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model | 2 |
@@ -32,7 +32,7 @@
 
 ## bronze.raw_documents
 
-File register. One row per unique source file pulled from the GitHub source repo. Raw bytes stay in data/landing.
+File register. One row per unique source file pulled by any connector (BC Laws API, GitHub API). Raw bytes stay in data/landing.
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
@@ -46,15 +46,15 @@ File register. One row per unique source file pulled from the GitHub source repo
 |--------|------|:--------:|-------------|
 | doc_id | string | no | SHA-256 of file bytes. Same content is never loaded twice. |
 | source_id | string | no | Key into config/sources.yaml |
-| source_system | string | no | Connector that fetched it (github) |
+| source_system | string | no | Connector that fetched it (bclaws | github) |
 | file_name | string | no | File name |
-| repo_path | string | no | Path of the file in the source repo |
+| source_ref | string | no | Where it lives in the source. Document id for BC Laws |
+| source_version | string | yes | Version marker from the source. ETag or Last-Modified for BC Laws |
+| remote_hash | string | yes | Hash the source gives before download (Git blob SHA). Null when the API has none. |
 | landing_path | string | no | Relative path under data/landing where the bytes were saved |
-| source_url | string | no | GitHub link to the exact commit and file that was loaded |
-| commit_sha | string | no | Repo commit the file was read at |
-| git_blob_sha | string | no | Git content hash. Used to skip unchanged files without downloading them. |
+| source_url | string | no | Link a person can open to see exactly what was loaded |
 | doc_type | string | no | act | regulation | inspection_report |
-| jurisdiction | string | no | Always ON for this build |
+| jurisdiction | string | no | ON or BC |
 | mime_type | string | no | Guessed from the file extension |
 | file_size_bytes | long | no | Size in bytes |
 | ingested_at | timestamp | no | UTC time the row was written |
@@ -69,7 +69,9 @@ File register. One row per unique source file pulled from the GitHub source repo
 | DQ-B-003 | critical | validity | Every file must map to a known document type. |
 | DQ-B-004 | critical | consistency | Every source_id must exist in config/sources.yaml and be approved. |
 | DQ-B-005 | critical | accuracy | The landing file must exist and still hash to its doc_id. Bronze promises we can rebuild from these files. |
-| DQ-B-006 | critical | completeness | Every file must record the exact commit it was read at, or we lose lineage to the source repo. |
+| DQ-B-006 | critical | completeness | Every file must record where it lives in the source system, or we lose lineage back to it. |
+| DQ-B-007 | critical | validity | Only the two provinces in scope. Also catches the YAML ON-becomes-true trap at the data level. |
+| DQ-B-008 | critical | validity | Every row must come from a known connector. |
 
 ## silver.document_pages
 
@@ -426,8 +428,8 @@ High-water mark per source for incremental loads. Only moved after a successful,
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
 | source_system | string | no | e.g. github |
-| scope | string | no | What the mark covers |
-| watermark_value | string | no | Last successfully loaded position (commit SHA for GitHub) |
+| scope | string | no | What the mark covers. owner/repo@branch for GitHub |
+| watermark_value | string | no | Last loaded position. Commit SHA for GitHub |
 | updated_at | timestamp | no | UTC |
 | load_id | string | no | run_id that moved the mark |
 

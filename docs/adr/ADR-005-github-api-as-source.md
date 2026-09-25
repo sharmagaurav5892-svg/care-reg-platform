@@ -1,6 +1,6 @@
 # ADR-005: Ingest source documents through the GitHub REST API
 
-- **Status:** Accepted
+- **Status:** Accepted, scope narrowed to Ontario by ADR-006
 - **Date:** 2026-09-25
 - **Decider:** Platform Owner
 

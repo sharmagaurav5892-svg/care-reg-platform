@@ -26,9 +26,14 @@ GitHub allows 60 requests an hour; with one, 5,000.
 from __future__ import annotations
 
 import os
+from collections import Counter
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+import pandas as pd
 
 from careplatform import config
+from careplatform.connectors.base import FetchedFile, FetchResult, SourceConnector
 from careplatform.connectors.http import ApiClient, ApiError
 
 API = "https://api.github.com"
@@ -42,8 +47,42 @@ class RemoteFile:
     size: int
 
 
-class GitHubConnector:
-    name = "github"
+def _source_for(path: str, sources: list[dict]) -> dict | None:
+    """Longest matching repo_path wins, so nested folders map correctly."""
+    matches = [s for s in sources if path.startswith(s["repo_path"])]
+    return max(matches, key=lambda s: len(s["repo_path"])) if matches else None
+
+
+def plan(files: list[RemoteFile], sources: list[dict], known_blobs: set[str]):
+    """Decide which files to download. Pure function, easy to test."""
+    ing = config.settings()["ingestion"]
+    allowed_ext = {e.lower() for e in ing["allowed_extensions"]}
+    max_bytes = ing["max_file_size_mb"] * 1024 * 1024
+
+    todo, skipped = [], Counter()
+    for f in files:
+        name = PurePosixPath(f.path).name
+        if name.startswith(".") or name.lower() == "readme.md":
+            skipped["housekeeping"] += 1
+            continue
+        src = _source_for(f.path, sources)
+        if src is None:
+            skipped["unregistered_path"] += 1
+        elif src["status"] != "approved":
+            skipped["source_not_approved"] += 1      # governance gate: never downloaded
+        elif PurePosixPath(f.path).suffix.lower() not in allowed_ext:
+            skipped["extension_not_allowed"] += 1
+        elif f.size > max_bytes:
+            skipped["too_large"] += 1
+        elif f.blob_sha in known_blobs:
+            skipped["unchanged"] += 1
+        else:
+            todo.append((f, src))
+    return todo, skipped
+
+
+class GitHubConnector(SourceConnector):
+    source_system = "github"
 
     def __init__(self, owner: str, repo: str, branch: str, run_id: str,
                  token: str | None = None, session=None, sleep=None):
@@ -58,7 +97,7 @@ class GitHubConnector:
         kwargs = {"session": session}
         if sleep:
             kwargs["sleep"] = sleep
-        self.client = ApiClient(API, connector=self.name, run_id=run_id, headers=headers, **kwargs)
+        self.client = ApiClient(API, connector=self.source_system, run_id=run_id, headers=headers, **kwargs)
 
     @classmethod
     def from_settings(cls, run_id: str) -> "GitHubConnector":
@@ -118,3 +157,36 @@ class GitHubConnector:
 
     def html_url(self, commit_sha: str, path: str) -> str:
         return f"https://github.com/{self.owner}/{self.repo}/blob/{commit_sha}/{path}"
+
+    # ---------- the connector contract ----------
+
+    def fetch(self, sources: list[dict], existing: pd.DataFrame, full_refresh: bool) -> FetchResult:
+        from careplatform.ingestion import watermarks
+
+        res = FetchResult()
+        head = self.head_commit()
+        last = watermarks.get(self.source_system, self.scope)
+        res.info.update(commit=head[:12], previous_watermark=(last or "none")[:12])
+        if head == last and not full_refresh:
+            res.info["up_to_date"] = True
+            return res
+
+        root = config.settings()["ingestion"]["github"]["root_path"]
+        files = self.list_files(head, prefix=root)
+        mine = existing[existing["source_system"] == self.source_system]
+        known = set() if full_refresh else set(mine["remote_hash"].dropna())
+        todo, res.skipped = plan(files, [s for s in sources if s["connector"] == "github"], known)
+        res.info["files_seen"] = len(files)
+
+        for f, src in todo:
+            res.items.append(FetchedFile(
+                source=src,
+                file_name=PurePosixPath(f.path).name,
+                source_ref=f.path,
+                source_url=self.html_url(head, f.path),
+                data=self.download(f),
+                source_version=head,
+                remote_hash=f.blob_sha,
+            ))
+        res.watermarks.append((self.scope, head))
+        return res

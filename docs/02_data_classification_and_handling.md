@@ -38,7 +38,7 @@ Public does not mean free to redistribute. Each source in `config/sources.yaml` 
 - `license_note`: what the terms of use say
 - `redistribute_raw`: whether raw files may be republished (default `false`)
 
-Source files live in a **private** GitHub repo (ADR-005) and are copied into `data/landing/`, which is git-ignored. Only code, config, and small derived samples go into the repo.
+Ontario source files live in a **private** GitHub repo (ADR-005). BC files are pulled from the BC Laws API (ADR-006). Both are copied into `data/landing/`, which is git-ignored. Only code, config, and small derived samples go into the repo.
 
 ## 5. Personal information check
 

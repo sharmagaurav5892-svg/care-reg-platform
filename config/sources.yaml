@@ -2,15 +2,69 @@
 # with status: approved. Adding a source is a Governance Council decision
 # (docs/00_governance_charter.md section 6).
 #
-# How files get here: each source's files are kept in the private GitHub repo
-# set in settings.yaml (ingestion.github), under its repo_path. The GitHub
-# connector maps every file to a source by that folder. Files from a source
-# that is not approved are never downloaded.
+# Two connectors, two provinces (ADR-005, ADR-006):
+#
+#   connector: bclaws   British Columbia. Pulled from the public BC Laws API
+#                       by document_id. No key needed.
+#   connector: github   Ontario. Ontario has no public legislation API, so the
+#                       files sit in a private GitHub repo and are pulled
+#                       through the GitHub REST API by repo_path.
+#
+# Files from a source that is not approved are never downloaded.
 #
 # url = where the document originally comes from (for citation and licensing).
-# bronze.raw_documents.source_url = the exact GitHub commit + path we loaded.
+# bronze.raw_documents.source_url = the exact document (BC) or commit + path (ON) we loaded.
 
 sources:
+
+  # ---------------- British Columbia (BC Laws API) ----------------
+
+  - source_id: bc_ccala_2002
+    connector: bclaws
+    document_id: "02075_01"   # quoted: YAML reads 96_2009 as a number
+    title: Community Care and Assisted Living Act, S.B.C. 2002, c. 75
+    publisher: Province of British Columbia (BC Laws)
+    url: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/02075_01
+    doc_type: act
+    jurisdiction: "BC"
+    classification: Public
+    license_note: BC King's Printer licence permits reuse with attribution. Verify current terms before republishing.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-25
+
+  - source_id: bc_reg_96_2009
+    connector: bclaws
+    document_id: "96_2009"   # quoted: YAML reads 96_2009 as a number
+    title: Residential Care Regulation, B.C. Reg. 96/2009
+    publisher: Province of British Columbia (BC Laws)
+    url: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96_2009
+    doc_type: regulation
+    jurisdiction: "BC"
+    classification: Public
+    license_note: BC King's Printer licence permits reuse with attribution. Verify current terms before republishing.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-25
+
+  - source_id: bc_reg_189_2019
+    connector: bclaws
+    document_id: "189_2019"   # quoted: YAML reads 96_2009 as a number
+    title: Assisted Living Regulation, B.C. Reg. 189/2019
+    publisher: Province of British Columbia (BC Laws)
+    url: https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/189_2019
+    doc_type: regulation
+    jurisdiction: "BC"
+    classification: Public
+    license_note: BC King's Printer licence permits reuse with attribution. Verify current terms before republishing.
+    redistribute_raw: false
+    status: approved
+    approved_by: Governance Council
+    approved_on: 2026-09-25
+
+  # ---------------- Ontario (private GitHub repo) ----------------
 
   - source_id: on_rha_2010
     connector: github

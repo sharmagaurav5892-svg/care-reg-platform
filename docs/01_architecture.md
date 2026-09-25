@@ -4,8 +4,8 @@
 
 | Layer | Holds | Rule |
 |-------|-------|------|
-| **Source** | Private GitHub repo `care-reg-source-docs`, one folder per source | Read through the GitHub REST API only (ADR-005) |
-| **Landing** | Files exactly as downloaded (`data/landing/github/<source>/<commit>/`) | Never edited. Not committed to git. DQ-B-005 checks they still match their hash. |
+| **Source** | BC Laws public API (BC). Private GitHub repo `care-reg-source-docs` (Ontario). | Read through their APIs only (ADR-005, ADR-006) |
+| **Landing** | Files exactly as downloaded (`data/landing/<connector>/<source>/<doc_id[:12]>/`) | Never edited. Not committed to git. DQ-B-005 checks they still match their hash. |
 | **Bronze** | File register: one row per file with hash, size, source and load id | Append only. Duplicate files (same hash) are skipped, not reloaded. |
 | **Silver** | Page text and clean chunks | Rebuilt from bronze. Must pass critical DQ rules before gold reads it. |
 | **Gold** | Embeddings, entities, relationships, eval sets, LLM call logs | Only thing the apps read. |
@@ -18,9 +18,11 @@ flowchart TB
       S2[Fixing Long-Term Care Act, 2021<br/>and O. Reg. 246/22]
       S3[Public inspection reports]
     end
+    BC[BC Laws API<br/>CCALA, Reg 96/2009, Reg 189/2019] -->|conditional GET, 304| L[Landing files]
     SRC --> GH[(Private GitHub repo)]
-    GH -->|REST API, incremental| L[Landing files]
-    GH -.->|every call| AL[ops.api_call_log]
+    GH -->|REST API, incremental| L
+    BC -.->|every call| AL[ops.api_call_log]
+    GH -.->|every call| AL
     L -->|register + hash| B[bronze.raw_documents]
     B -->|extract text| SP[silver.document_pages]
     SP -->|clean + chunk| SC[silver.chunks]
@@ -39,7 +41,7 @@ flowchart TB
 
 | Component | Tech | Cost |
 |-----------|------|------|
-| Source integration | GitHub REST API, shared HTTP client with retries and rate limits | $0 |
+| Source integration | BC Laws API and GitHub REST API, one shared HTTP client, one connector contract | $0 |
 | Storage format | Delta Lake via `deltalake` (delta-rs) Python library | $0 |
 | Local query engine | DuckDB | $0 |
 | Cloud lakehouse (optional) | Microsoft Fabric lakehouse on OneLake, trial capacity | $0 for 60 days |
@@ -105,4 +107,5 @@ Notebooks stay thin on purpose. All logic lives in `src/` so it can be tested, r
 | [002](adr/ADR-002-neo4j-for-graph-and-vectors.md) | Neo4j for both graph and vector search |
 | [003](adr/ADR-003-governance-as-code.md) | Catalog and DQ rules as YAML, enforced by tests |
 | [004](adr/ADR-004-no-raw-prompt-logging.md) | Do not store raw user questions in logs by default |
-| [005](adr/ADR-005-github-api-as-source.md) | Ingest source documents through the GitHub REST API |
+| [005](adr/ADR-005-github-api-as-source.md) | Ingest Ontario documents through the GitHub REST API |
+| [006](adr/ADR-006-bc-laws-public-api.md) | Add British Columbia through the public BC Laws API |

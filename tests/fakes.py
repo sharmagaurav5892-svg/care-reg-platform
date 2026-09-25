@@ -65,3 +65,42 @@ class FakeGitHub:
                 if git_blob_sha(d) == sha:
                     return make_response(200, d)
         return make_response(404, {"message": "Not Found"})
+
+
+class FakeBCLaws:
+    """Fake BC Laws API: /civix/document/id/complete/statreg/{id}[/xml].
+
+    Supports ETag and If-None-Match like a well-behaved server, and can be
+    switched to ignore validators or to publish some documents as HTML only.
+    """
+    BASE = "https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/"
+
+    def __init__(self, docs: dict[str, bytes]):
+        self.docs = dict(docs)
+        self.html_only: set[str] = set()     # these return 404 on /xml
+        self.send_validators = True          # False = server ignores caching
+        self.queued: list[requests.Response] = []
+        self.requests: list[tuple[str, dict]] = []
+
+    @staticmethod
+    def etag(data: bytes) -> str:
+        return '"' + hashlib.md5(data).hexdigest() + '"'
+
+    def get(self, url, headers=None, params=None, timeout=None):
+        headers = dict(headers or {})
+        self.requests.append((url, headers))
+        if self.queued:
+            return self.queued.pop(0)
+        rest = url.replace(self.BASE, "")
+        doc_id, _, fmt = rest.partition("/")
+        if doc_id not in self.docs or (fmt == "xml" and doc_id in self.html_only):
+            return make_response(404, b"<error>not found</error>")
+        data = self.docs[doc_id]
+        if fmt != "xml":
+            data = b"<html>" + data + b"</html>"
+        if not self.send_validators:
+            return make_response(200, data)
+        tag = self.etag(data)
+        if headers.get("If-None-Match") == tag:
+            return make_response(304, b"", {"ETag": tag})
+        return make_response(200, data, {"ETag": tag, "Last-Modified": "Tue, 04 Feb 2025 00:00:00 GMT"})

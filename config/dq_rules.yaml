@@ -59,8 +59,26 @@ rules:
     dimension: completeness
     severity: critical
     check: not_null
-    column: commit_sha
-    description: Every file must record the exact commit it was read at, or we lose lineage to the source repo.
+    column: source_ref
+    description: Every file must record where it lives in the source system, or we lose lineage back to it.
+
+  - id: DQ-B-007
+    table: bronze.raw_documents
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: jurisdiction
+    values: ["ON", "BC"]
+    description: Only the two provinces in scope. Also catches the YAML ON-becomes-true trap at the data level.
+
+  - id: DQ-B-008
+    table: bronze.raw_documents
+    dimension: validity
+    severity: critical
+    check: allowed_values
+    column: source_system
+    values: [bclaws, github]
+    description: Every row must come from a known connector.
 
   # ---------------- SILVER ----------------
   - id: DQ-S-001

@@ -18,7 +18,7 @@ tables:
   - name: bronze.raw_documents
     layer: bronze
     domain: regulations
-    description: File register. One row per unique source file pulled from the GitHub source repo. Raw bytes stay in data/landing.
+    description: File register. One row per unique source file pulled by any connector (BC Laws API, GitHub API). Raw bytes stay in data/landing.
     classification: Public
     retention_days: 1825
     grain: one row per unique file (by content hash)
@@ -27,15 +27,15 @@ tables:
     columns:
       - {name: doc_id,          type: string,    nullable: false, description: SHA-256 of file bytes. Same content is never loaded twice.}
       - {name: source_id,       type: string,    nullable: false, description: Key into config/sources.yaml}
-      - {name: source_system,   type: string,    nullable: false, description: Connector that fetched it (github)}
+      - {name: source_system,   type: string,    nullable: false, description: Connector that fetched it (bclaws | github)}
       - {name: file_name,       type: string,    nullable: false, description: File name}
-      - {name: repo_path,       type: string,    nullable: false, description: Path of the file in the source repo}
+      - {name: source_ref,      type: string,    nullable: false, description: Where it lives in the source. Document id for BC Laws, repo path for GitHub.}
+      - {name: source_version,  type: string,    nullable: true,  description: Version marker from the source. ETag or Last-Modified for BC Laws, commit SHA for GitHub.}
+      - {name: remote_hash,     type: string,    nullable: true,  description: Hash the source gives before download (Git blob SHA). Null when the API has none.}
       - {name: landing_path,    type: string,    nullable: false, description: Relative path under data/landing where the bytes were saved}
-      - {name: source_url,      type: string,    nullable: false, description: GitHub link to the exact commit and file that was loaded}
-      - {name: commit_sha,      type: string,    nullable: false, description: Repo commit the file was read at}
-      - {name: git_blob_sha,    type: string,    nullable: false, description: Git content hash. Used to skip unchanged files without downloading them.}
+      - {name: source_url,      type: string,    nullable: false, description: Link a person can open to see exactly what was loaded}
       - {name: doc_type,        type: string,    nullable: false, description: act | regulation | inspection_report}
-      - {name: jurisdiction,    type: string,    nullable: false, description: Always ON for this build}
+      - {name: jurisdiction,    type: string,    nullable: false, description: ON or BC}
       - {name: mime_type,       type: string,    nullable: false, description: Guessed from the file extension}
       - {name: file_size_bytes, type: long,      nullable: false, description: Size in bytes}
       - {name: ingested_at,     type: timestamp, nullable: false, description: UTC time the row was written}
@@ -278,7 +278,7 @@ tables:
     write_mode: merge
     columns:
       - {name: source_system,   type: string,    nullable: false, description: e.g. github}
-      - {name: scope,           type: string,    nullable: false, description: What the mark covers, e.g. owner/repo@branch}
-      - {name: watermark_value, type: string,    nullable: false, description: Last successfully loaded position (commit SHA for GitHub)}
+      - {name: scope,           type: string,    nullable: false, description: What the mark covers. owner/repo@branch for GitHub, document id for BC Laws.}
+      - {name: watermark_value, type: string,    nullable: false, description: Last loaded position. Commit SHA for GitHub, ETag and Last-Modified JSON for a BC Laws document.}
       - {name: updated_at,      type: timestamp, nullable: false, description: UTC}
       - {name: load_id,         type: string,    nullable: false, description: run_id that moved the mark}

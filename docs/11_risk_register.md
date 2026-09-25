@@ -16,6 +16,8 @@ Likelihood and impact on a 1 (low) to 3 (high) scale. Score = likelihood x impac
 | R-10 | Neo4j free instance paused or deleted when idle | 3 | 1 | 3 | Graph can be fully rebuilt from gold in one command | Data Engineer | Open |
 | R-11 | Single person holds every role, no real separation of duties | 3 | 1 | 3 | Accepted for portfolio build. Roles documented so they can be split. | Platform Owner | Accepted |
 | R-12 | GitHub token leaked or over-scoped | 1 | 2 | 2 | Fine-grained token, one repo, read-only, 90 day expiry, never logged (I-8), key rotation runbook | Data Engineer | Open |
-| R-13 | GitHub API outage or rate limit stops a load | 2 | 1 | 2 | Retries with backoff, rate limit wait, clear failure, watermark not moved so next run catches up | Data Engineer | Open |
+| R-13 | GitHub or BC Laws API outage or rate limit stops a load | 2 | 1 | 2 | Retries with backoff, rate limit wait, clear failure, watermark not moved so next run catches up | Data Engineer | Open |
+| R-14 | BC Laws API changes its URL scheme or format | 1 | 2 | 2 | Paths in settings.yaml not code, XML to HTML fallback, clear failure, BC and Ontario run separately | Data Engineer | Open |
+| R-15 | Mixing up BC and Ontario rules in answers | 2 | 3 | 6 | jurisdiction on every row (DQ-B-007), jurisdiction on graph entities (step 4), eval questions per province | AI Model Owner | Open |
 
 Reviewed at every release.

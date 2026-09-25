@@ -11,12 +11,17 @@ lakehouse:
   fabric_root: null             # set to the OneLake abfss:// Tables path in fabric mode
 
 ingestion:
+  enabled_connectors: [bclaws, github]   # each runs as its own pipeline run
+  bclaws:
+    base_url: https://www.bclaws.gov.bc.ca
+    document_path: /civix/document/id/complete/statreg/{document_id}
+    user_agent: care-reg-platform/0.2 (portfolio project, low volume)
   github:
     owner: "<your-github-username>"   # or set GITHUB_OWNER in .env
     repo: care-reg-source-docs         # private repo holding the source files
     branch: main
     root_path: regulations/            # only files under here are considered
-  allowed_extensions: [.pdf, .html, .htm, .txt, .md]
+  allowed_extensions: [.pdf, .html, .htm, .txt, .md, .xml]
   max_file_size_mb: 50
 
 http:

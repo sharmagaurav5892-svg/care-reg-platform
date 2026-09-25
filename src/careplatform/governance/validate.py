@@ -17,8 +17,10 @@ REQUIRED_TABLE_FIELDS = [
 ]
 REQUIRED_COLUMN_FIELDS = ["name", "type", "nullable", "description"]
 REQUIRED_RULE_FIELDS = ["id", "table", "dimension", "severity", "check", "description"]
+CONNECTOR_FIELDS = {"github": ["repo_path"], "bclaws": ["document_id"]}
+ALLOWED_JURISDICTIONS = {"ON", "BC"}
 REQUIRED_SOURCE_FIELDS = [
-    "source_id", "connector", "repo_path", "title", "publisher", "url", "doc_type", "jurisdiction",
+    "source_id", "connector", "title", "publisher", "url", "doc_type", "jurisdiction",
     "classification", "license_note", "redistribute_raw", "status",
 ]
 # every row in these layers must carry a load_id back to ops.run_log
@@ -137,15 +139,27 @@ def check_sources(src: dict | None = None) -> list[str]:
             problems.append(f"{sid}: duplicate source_id")
         ids.add(sid)
         # YAML reads bare ON/OFF/YES/NO as booleans. Every text field must really be text.
-        for field in ("source_id", "jurisdiction", "doc_type", "repo_path", "status"):
+        for field in ("source_id", "jurisdiction", "doc_type", "repo_path", "document_id", "status"):
             if field in s and not isinstance(s[field], str):
                 problems.append(f"{sid}: {field} must be a string, got {s[field]!r} (quote it in YAML)")
-        rp = s.get("repo_path", "")
-        if not rp.startswith(root) or not rp.endswith("/"):
-            problems.append(f"{sid}: repo_path must sit under {root} and end with /")
-        if rp in paths:
-            problems.append(f"{sid}: repo_path {rp} is used by another source")
-        paths.add(rp)
+        conn = s.get("connector")
+        if conn not in CONNECTOR_FIELDS:
+            problems.append(f"{sid}: unknown connector {conn!r}")
+            continue
+        for field in CONNECTOR_FIELDS[conn]:
+            if not s.get(field):
+                problems.append(f"{sid}: connector {conn} needs {field}")
+        if s.get("jurisdiction") not in ALLOWED_JURISDICTIONS:
+            problems.append(f"{sid}: jurisdiction {s.get('jurisdiction')!r} not in {sorted(ALLOWED_JURISDICTIONS)}")
+        # the same repo folder or BC document must not be claimed by two sources
+        key = s.get("repo_path") or s.get("document_id")
+        if key in paths:
+            problems.append(f"{sid}: {key} is already used by another source")
+        paths.add(key)
+        if conn == "github":
+            rp = s.get("repo_path", "")
+            if not rp.startswith(root) or not rp.endswith("/"):
+                problems.append(f"{sid}: repo_path must sit under {root} and end with /")
         if s.get("doc_type") not in allowed_doc_types:
             problems.append(f"{sid}: doc_type {s.get('doc_type')!r} not allowed")
         if s.get("classification") != "Public":

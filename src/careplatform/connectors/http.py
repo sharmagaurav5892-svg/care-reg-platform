@@ -18,10 +18,14 @@ What it handles, and why each one matters:
    GitHub style 403 with X-RateLimit-Remaining: 0: wait until the time in
    X-RateLimit-Reset, unless that is too far away, then fail clearly.
 
-4. Pagination
+4. Conditional requests
+   Pass If-None-Match / If-Modified-Since in `headers`. If the server says
+   304 Not Modified, the file hasn't changed and no body is sent.
+
+5. Pagination
    Follows the `Link: <...>; rel="next"` header until there are no pages left.
 
-5. Audit log
+6. Audit log
    Every attempt (including retries) is recorded and flushed to
    ops.api_call_log at the end of the run. The auth token is never logged.
 """
@@ -75,9 +79,11 @@ class ApiClient:
 
     # ---------- core ----------
 
-    def get(self, path: str, params: dict | None = None, accept: str | None = None) -> requests.Response:
+    def get(self, path: str, params: dict | None = None, accept: str | None = None,
+            headers: dict | None = None) -> requests.Response:
+        """GET with retries. A 304 Not Modified counts as success (resp.ok is True for 3xx)."""
         url = path if path.startswith("http") else f"{self.base_url}{path}"
-        headers = dict(self.headers)
+        headers = {**self.headers, **(headers or {})}
         if accept:
             headers["Accept"] = accept
 

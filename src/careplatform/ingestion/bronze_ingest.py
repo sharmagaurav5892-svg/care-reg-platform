@@ -1,28 +1,27 @@
-"""Bronze ingestion: GitHub API -> landing files -> bronze.raw_documents.
+"""Bronze ingestion: source APIs -> landing files -> bronze.raw_documents.
 
 Run it:
-    python -m careplatform.ingestion.bronze_ingest
+    python -m careplatform.ingestion.bronze_ingest                      # every enabled connector
+    python -m careplatform.ingestion.bronze_ingest --connector bclaws   # just one
     python -m careplatform.ingestion.bronze_ingest --full-refresh
 
-What happens, in order:
+Each connector gets its OWN run in ops.run_log (bronze_ingest:github,
+bronze_ingest:bclaws). If BC Laws is down, Ontario still loads, and the
+failure is visible on its own. That is failure isolation.
+
+For each connector, in order:
 
   1. Start a run in ops.run_log (status RUNNING).
-  2. Ask GitHub for the latest commit on the branch.
-     Same as the saved watermark? Stop here. Nothing changed.
-  3. List every file in the repo at that commit.
-  4. Decide, for each file, whether to take it. Files are skipped when:
-       - their folder isn't mapped to any source in config/sources.yaml
-       - their source isn't approved yet   <- governance gate, BEFORE download
-       - the extension or size isn't allowed
-       - their Git blob SHA is already in bronze (unchanged file)
-  5. Download only the files that are left.
-  6. Hash each file (SHA-256 = doc_id). Same content already loaded under
-     another name? Skip it.
-  7. Save the bytes to data/landing/github/<source>/<commit>/<file>.
-  8. Run DQ rules on bronze + the new rows. Any critical failure: stop,
-     write nothing to bronze, keep the landing files for debugging.
-  9. Append the new rows to bronze and move the watermark forward.
- 10. Always (even on failure): flush every API call to ops.api_call_log and
+  2. connector.fetch(): the connector talks to its API, applies the
+     governance gate (unapproved sources are never downloaded) and its own
+     change detection (commit watermark for GitHub, 304 Not Modified for
+     BC Laws), and hands back only new or changed files.
+  3. Hash each file (SHA-256 = doc_id). Same content already loaded? Skip.
+  4. Save bytes to data/landing/<system>/<source_id>/<doc_id[:12]>/<file>.
+  5. Run DQ rules on bronze + the new rows. Any critical failure: stop,
+     write nothing to bronze, keep landing files for debugging.
+  6. Append new rows to bronze, THEN save the connector's watermarks.
+  7. Always (even on failure): flush API calls to ops.api_call_log and
      close the run as SUCCEEDED or FAILED.
 """
 from __future__ import annotations
@@ -30,14 +29,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import mimetypes
-from collections import Counter
 from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import pandas as pd
 
 from careplatform import config, lakehouse
-from careplatform.connectors.github import GitHubConnector, RemoteFile
+from careplatform.connectors.base import SourceConnector
 from careplatform.dq.engine import run_checks
 from careplatform.ingestion import watermarks
 from careplatform.runlog import PipelineFailed, start_run
@@ -45,93 +43,65 @@ from careplatform.runlog import PipelineFailed, start_run
 TABLE = "bronze.raw_documents"
 
 
-def _source_for(path: str, sources: list[dict]) -> dict | None:
-    """Longest matching repo_path wins, so nested folders map correctly."""
-    matches = [s for s in sources if path.startswith(s["repo_path"])]
-    return max(matches, key=lambda s: len(s["repo_path"])) if matches else None
+def build_connector(name: str, run_id: str) -> SourceConnector:
+    if name == "github":
+        from careplatform.connectors.github import GitHubConnector
+        return GitHubConnector.from_settings(run_id)
+    if name == "bclaws":
+        from careplatform.connectors.bclaws import BCLawsConnector
+        return BCLawsConnector.from_settings(run_id)
+    raise ValueError(f"Unknown connector {name!r}")
 
 
-def plan(files: list[RemoteFile], existing: pd.DataFrame) -> tuple[list[tuple[RemoteFile, dict]], Counter]:
-    """Decide which files to download. Pure function, easy to test."""
-    ing = config.settings()["ingestion"]
-    allowed_ext = {e.lower() for e in ing["allowed_extensions"]}
-    max_bytes = ing["max_file_size_mb"] * 1024 * 1024
-    sources = config.sources()["sources"]
-    known_blobs = set(existing["git_blob_sha"])
-
-    todo, skipped = [], Counter()
-    for f in files:
-        name = PurePosixPath(f.path).name
-        if name.startswith(".") or name.lower() == "readme.md":
-            skipped["housekeeping"] += 1
-            continue
-        src = _source_for(f.path, sources)
-        if src is None:
-            skipped["unregistered_path"] += 1
-        elif src["status"] != "approved":
-            skipped["source_not_approved"] += 1
-        elif PurePosixPath(f.path).suffix.lower() not in allowed_ext:
-            skipped["extension_not_allowed"] += 1
-        elif f.size > max_bytes:
-            skipped["too_large"] += 1
-        elif f.blob_sha in known_blobs:
-            skipped["unchanged"] += 1
-        else:
-            todo.append((f, src))
-    return todo, skipped
-
-
-def run(full_refresh: bool = False, connector: GitHubConnector | None = None) -> dict:
-    summary: dict = {}
-    with start_run("bronze_ingest") as r:
-        gh = connector or GitHubConnector.from_settings(r.run_id)
-        gh.client.run_id = r.run_id
+def run(connector_name: str | None = None, full_refresh: bool = False,
+        connector: SourceConnector | None = None) -> dict:
+    """Load one connector. Pass `connector` in tests to use a fake API."""
+    name = connector.source_system if connector else connector_name
+    summary: dict = {"connector": name}
+    with start_run(f"bronze_ingest:{name}") as r:
+        conn = connector or build_connector(name, r.run_id)
+        conn.client.run_id = r.run_id
         try:
-            head = gh.head_commit()
-            last = watermarks.get("github", gh.scope)
-            summary.update(commit=head[:12], previous_watermark=(last or "none")[:12])
-
-            if head == last and not full_refresh:
-                r.rows_in, r.rows_out = 0, 0
-                summary["result"] = "no new commits, nothing to do"
-                return summary
-
-            root = config.settings()["ingestion"]["github"]["root_path"]
-            files = gh.list_files(head, prefix=root)
             existing = lakehouse.read(TABLE)
-            todo, skipped = plan(files, existing if not full_refresh else existing.iloc[0:0])
+            res = conn.fetch(config.sources()["sources"], existing, full_refresh)
+            summary.update(res.info)
+
+            if res.info.get("up_to_date"):
+                r.rows_in, r.rows_out = 0, 0
+                summary["result"] = "no changes at source, nothing to do"
+                return summary
 
             known_docs = set(existing["doc_id"])
             landing_root = config.REPO_ROOT / config.settings()["lakehouse"]["landing_root"]
             now = datetime.now(timezone.utc)
+            skipped = res.skipped
             rows = []
-            for f, src in todo:
-                data = gh.download(f)
-                doc_id = hashlib.sha256(data).hexdigest()
+            for f in res.items:
+                doc_id = hashlib.sha256(f.data).hexdigest()
                 if doc_id in known_docs:
                     skipped["duplicate_content"] += 1
                     continue
                 known_docs.add(doc_id)
 
-                name = PurePosixPath(f.path).name
-                dest = landing_root / "github" / src["source_id"] / head[:12] / name
+                src = f.source
+                dest = landing_root / name / src["source_id"] / doc_id[:12] / f.file_name
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(data)
+                dest.write_bytes(f.data)
 
                 rows.append({
                     "doc_id": doc_id,
                     "source_id": src["source_id"],
-                    "source_system": "github",
-                    "file_name": name,
-                    "repo_path": f.path,
+                    "source_system": name,
+                    "file_name": f.file_name,
+                    "source_ref": f.source_ref,
+                    "source_version": f.source_version,
+                    "remote_hash": f.remote_hash,
                     "landing_path": Path(dest).relative_to(config.REPO_ROOT).as_posix(),
-                    "source_url": gh.html_url(head, f.path),
-                    "commit_sha": head,
-                    "git_blob_sha": f.blob_sha,
+                    "source_url": f.source_url,
                     "doc_type": src["doc_type"],
                     "jurisdiction": src["jurisdiction"],
-                    "mime_type": mimetypes.guess_type(name)[0] or "application/octet-stream",
-                    "file_size_bytes": len(data),
+                    "mime_type": mimetypes.guess_type(f.file_name)[0] or "application/octet-stream",
+                    "file_size_bytes": len(f.data),
                     "ingested_at": now,
                     "load_id": r.run_id,
                 })
@@ -145,33 +115,46 @@ def run(full_refresh: bool = False, connector: GitHubConnector | None = None) ->
                 raise PipelineFailed(f"Critical DQ rules failed: {failed}. Nothing written to bronze.")
 
             lakehouse.append(TABLE, new)
-            watermarks.set("github", gh.scope, head, r.run_id)
+            for scope, value in res.watermarks:           # only after data is safely written
+                watermarks.set(name, scope, value, r.run_id)
 
-            r.rows_in, r.rows_out = len(files), len(new)
-            summary.update(files_seen=len(files), loaded=len(new), skipped=dict(skipped),
-                           result="succeeded")
+            r.rows_in, r.rows_out = len(res.items) + sum(skipped.values()), len(new)
+            summary.update(loaded=len(new), skipped=dict(skipped), result="succeeded")
             return summary
         finally:
-            summary["api_calls"] = len(gh.client.calls)
-            gh.client.flush_log()
+            summary["api_calls"] = len(conn.client.calls)
+            conn.client.flush_log()
+
+
+def run_all(full_refresh: bool = False, only: str | None = None) -> list[dict]:
+    """Run each enabled connector separately. One failing doesn't stop the others."""
+    names = [only] if only else config.settings()["ingestion"]["enabled_connectors"]
+    results = []
+    for n in names:
+        try:
+            results.append(run(n, full_refresh=full_refresh))
+        except Exception as e:
+            results.append({"connector": n, "result": f"FAILED: {e}"})
+    return results
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Load source documents from GitHub into bronze.")
+    p = argparse.ArgumentParser(description="Load source documents from source APIs into bronze.")
+    p.add_argument("--connector", choices=["github", "bclaws"], help="run only this connector")
     p.add_argument("--full-refresh", action="store_true",
-                   help="Ignore the watermark and re-check every file (still skips identical content).")
-    args = p.parse_args()
-    try:
-        s = run(full_refresh=args.full_refresh)
-    except Exception as e:
-        print(f"\nRun FAILED: {e}\nSee ops.run_log and ops.dq_results for details.")
+                   help="Ignore watermarks and re-check everything (identical content is still skipped).")
+    a = p.parse_args()
+    results = run_all(full_refresh=a.full_refresh, only=a.connector)
+    for s in results:
+        print(f"\n=== bronze ingest: {s['connector']}")
+        for k, v in s.items():
+            if k == "dq":
+                print("  dq checks:\n" + v)
+            elif k != "connector":
+                print(f"  {k}: {v}")
+    if any(str(s.get("result", "")).startswith("FAILED") for s in results):
+        print("\nAt least one connector failed. See ops.run_log, ops.dq_results and ops.api_call_log.")
         raise SystemExit(1)
-    print("\nBronze ingest")
-    for k, v in s.items():
-        if k == "dq":
-            print("  dq checks:\n" + v)
-        else:
-            print(f"  {k}: {v}")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,11 @@
 # CareReg Intelligence Platform
 
-A governed data and AI platform that turns Ontario seniors care regulations and public inspection reports into something you can actually ask questions of. Source documents come in through the GitHub REST API, with incremental loads, retries, rate limit handling and a full audit trail.
+A governed data and AI platform that turns seniors care regulations from two provinces into something you can actually ask questions of.
+
+- **British Columbia** comes in through the public **BC Laws API** (no key, conditional requests, 304 Not Modified).
+- **Ontario** has no public legislation API, so its documents sit in a private repo and come in through the **GitHub REST API** (token auth, commit watermark).
+
+Same pipeline, two connectors, full audit trail of every API call.
 
 It is built as three AI projects sitting on one shared, governed data foundation:
 
@@ -15,7 +20,7 @@ The point of the build is not just "a chatbot over PDFs". It is showing how an A
 
 ## Why this domain
 
-Retirement homes and long-term care homes in Ontario are regulated by two large, cross-referencing bodies of law plus thousands of public inspection reports. Questions like "which requirements apply to a home that provides memory care, and which ones show up most in inspection findings?" need relationships, not just keyword search. That is exactly where a knowledge graph beats plain vector RAG.
+Retirement homes and long-term care homes in Ontario, and assisted living and residential care in BC, are each regulated by large, cross-referencing bodies of law. Questions like "which requirements apply to a home that provides memory care, and which ones show up most in inspection findings?" need relationships, not just keyword search. Add a second province and you get questions like "how does BC's rule on this compare to Ontario's?" That is exactly where a knowledge graph beats plain vector RAG.
 
 All source data is public. No employer data, no resident data, no personal information is used anywhere in this project.
 
@@ -23,7 +28,8 @@ All source data is public. No employer data, no resident data, no personal infor
 
 ```mermaid
 flowchart LR
-    A[Private GitHub repo<br/>source documents] -->|GitHub REST API<br/>incremental| B[Bronze<br/>raw files + file register]
+    A1[BC Laws public API<br/>British Columbia] -->|conditional GET| B[Bronze<br/>raw files + file register]
+    A[Private GitHub repo<br/>Ontario] -->|GitHub REST API<br/>incremental| B
     B --> C[Silver<br/>pages, clean chunks]
     C --> D[Gold<br/>embeddings, entities,<br/>relationships, eval sets]
     D --> E[(Neo4j<br/>graph + vectors)]
@@ -61,7 +67,7 @@ This repo carries a full governance pack. In a solo portfolio build every role i
 | [09 Change management](docs/09_change_management.md) | Branching, PR checks, environments, releases |
 | [10 Cost management](docs/10_cost_management.md) | Budgets, alerts, unit costs, cost per answer |
 | [11 Risk register](docs/11_risk_register.md) | Known risks, likelihood, impact, controls |
-| [12 Integration standards](docs/12_integration_standards.md) | Rules every API connector follows: timeouts, retries, rate limits, watermarks |
+| [12 Integration standards](docs/12_integration_standards.md) | Rules every API connector follows: timeouts, retries, rate limits, watermarks, conditional requests |
 | [ADRs](docs/adr/) | Why each big decision was made |
 | [Runbooks](docs/runbooks/) | What to do when something breaks |
 
@@ -88,10 +94,12 @@ copy .env.example .env          # Windows  (cp on macOS / Linux), then fill in k
 pytest                          # governance checks must pass before anything runs
 ```
 
-Load the source documents (after setting up the source repo, see [source_repo_template/README.md](source_repo_template/README.md)):
+Load the source documents:
 
 ```bash
-python -m careplatform.ingestion.bronze_ingest     # incremental load from GitHub
+python -m careplatform.ingestion.bronze_ingest --connector bclaws   # BC, works with no setup
+python -m careplatform.ingestion.bronze_ingest --connector github   # Ontario, needs the source repo and token
+python -m careplatform.ingestion.bronze_ingest                      # both, each as its own run
 python -m careplatform.show                        # which tables have data
 python -m careplatform.show bronze.raw_documents   # look at one table
 python -m careplatform.show ops.api_call_log       # every API call, with retries
@@ -102,7 +110,7 @@ python -m careplatform.show ops.api_call_log       # every API call, with retrie
 | Step | Deliverable |
 |------|-------------|
 | 1 ✅ | Repo foundation, governance pack, catalog and DQ rules as code |
-| 2 ✅ | Bronze ingestion through the GitHub API: connector, watermarks, run log, API audit log, DQ gate |
+| 2 ✅ | Bronze ingestion from two APIs (BC Laws, GitHub): connector contract, watermarks, run log, API audit log, DQ gate |
 | 3 | Silver: PDF text extraction, cleaning, chunking, DQ checks |
 | 4 | Gold: embeddings, entity and relationship extraction |
 | 5 | Neo4j graph load and vector index |

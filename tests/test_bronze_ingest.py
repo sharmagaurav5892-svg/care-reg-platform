@@ -1,4 +1,4 @@
-"""End to end bronze ingestion against the fake GitHub API."""
+"""End to end bronze ingestion against the fake GitHub API (Ontario source)."""
 import pandas as pd
 import pytest
 
@@ -45,11 +45,13 @@ def test_first_load(lakehouse_tmp, gh):
     # landing files exist and lineage columns are filled
     for _, row in bronze.iterrows():
         assert (lakehouse_tmp / row["landing_path"]).read_bytes() in (RHA, OREG)
-        assert row["commit_sha"] == fake.head
+        assert row["source_version"] == fake.head
+        assert row["remote_hash"] and row["source_system"] == "github"
         assert row["source_url"].startswith("https://github.com/gaurav/care-reg-source-docs/blob/")
 
     run = lakehouse.read("ops.run_log").iloc[0]
     assert run["status"] == "SUCCEEDED" and run["rows_out"] == 2
+    assert run["pipeline"] == "bronze_ingest:github"
     assert set(bronze["load_id"]) == {run["run_id"]}          # every row points to its run
 
     assert watermarks.get("github", conn.scope) == fake.head
@@ -69,7 +71,7 @@ def test_rerun_with_no_new_commit_costs_one_call(lakehouse_tmp, gh):
     bronze_ingest.run(connector=conn)
     before = len(fake.requests)
     s = bronze_ingest.run(connector=conn)
-    assert s["result"] == "no new commits, nothing to do"
+    assert s["result"] == "no changes at source, nothing to do"
     assert len(fake.requests) - before == 1
     assert len(lakehouse.read("bronze.raw_documents")) == 2
 
@@ -160,8 +162,8 @@ def test_dq_gate_catches_unapproved_source(lakehouse_tmp):
     """Backstop: even if the plan step had a bug, DQ-B-004 stops unapproved data."""
     df = pd.DataFrame([{
         "doc_id": "a" * 64, "source_id": "on_ltc_inspection_reports", "source_system": "github",
-        "file_name": "x.pdf", "repo_path": "regulations/x.pdf", "landing_path": "nowhere",
-        "source_url": "u", "commit_sha": "c", "git_blob_sha": "b", "doc_type": "inspection_report",
+        "file_name": "x.pdf", "source_ref": "regulations/x.pdf", "landing_path": "nowhere",
+        "source_url": "u", "source_version": "c", "remote_hash": "b", "doc_type": "inspection_report",
         "jurisdiction": "ON", "mime_type": "application/pdf", "file_size_bytes": 10,
         "ingested_at": pd.Timestamp.now(tz="UTC"), "load_id": "r",
     }])

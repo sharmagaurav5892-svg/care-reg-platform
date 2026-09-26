@@ -5,7 +5,7 @@ resources:
   jobs:
     bronze_ingest:
       name: care-reg bronze ingest (${bundle.target})
-      description: Publish catalog metadata to Unity Catalog, then load BC legislation from the BC Laws API into bronze.
+      description: Publish catalog metadata to Unity Catalog, then register BC Laws batches from the landing volume into bronze.
 
       tasks:
         - task_key: publish_catalog
@@ -17,13 +17,13 @@ resources:
                          --config-dir, "${workspace.file_path}/config",
                          --git-commit, "${bundle.git.commit}"]
 
-        - task_key: bronze_bclaws
+        - task_key: register_bclaws
           depends_on:
             - task_key: publish_catalog
           environment_key: default
           python_wheel_task:
             package_name: careplatform
-            entry_point: careplatform-bronze
+            entry_point: careplatform-register
             parameters: [--connector, bclaws,
                          --mode, databricks, --catalog, "${var.catalog}",
                          --config-dir, "${workspace.file_path}/config",

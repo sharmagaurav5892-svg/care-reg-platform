@@ -76,3 +76,4 @@ Then add a `bronze_github` task to `resources/jobs.yml` with `--connector github
 | `already exists` on a schema | Schema was created by hand before the bundle | Drop it (empty) or `databricks bundle deployment bind` it |
 | Job fails reaching `bclaws.gov.bc.ca` | Identity not verified | Step 1 |
 | Workspace compute unavailable | Free Edition daily quota hit | Wait until tomorrow |
+   | `numpy.core.multiarray failed to import` (job task) | The wheel listed pandas/pyarrow/numpy, so pip upgraded one inside the job and broke the preinstalled set | Keep them out of `pyproject.toml` dependencies (enforced by `test_wheel_does_not_reinstall_runtime_libraries`) |

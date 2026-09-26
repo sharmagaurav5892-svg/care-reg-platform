@@ -10,11 +10,9 @@ requires-python = ">=3.11"
 # Only what the wheel needs on Databricks, where these are already installed.
 # Laptop-only tools (deltalake, duckdb, pytest...) live in requirements.txt.
 dependencies = [
-  "pyyaml>=6.0",
-  "requests>=2.31",
-  "pandas>=2.0",
-  "pyarrow>=14.0",
-]
+     "pyyaml>=6.0",
+     "requests>=2.28",
+   ]
 
 # Entry points the Databricks jobs call (resources/jobs.yml, python_wheel_task).
 [project.scripts]

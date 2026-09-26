@@ -87,3 +87,15 @@ def test_target_catalogs_are_bootstrapped():
     created = set(re.findall(r"CREATE CATALOG IF NOT EXISTS (\w+)", sql))
     for name, t in targets.items():
         assert t["variables"]["catalog"] in created, f"target {name} catalog not in bootstrap"
+
+
+# Packages Databricks serverless already provides, built against each other.
+# If the wheel declares them, pip may upgrade one inside the job and break the rest.
+RUNTIME_PROVIDED = {"numpy", "pandas", "pyarrow", "pyspark", "delta-spark", "scipy"}
+
+
+def test_wheel_does_not_reinstall_runtime_libraries():
+    deps = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["dependencies"]
+    names = {re.split(r"[<>=!~\[ ]", d, maxsplit=1)[0].lower() for d in deps}
+    clash = names & RUNTIME_PROVIDED
+    assert not clash, f"Remove {clash} from pyproject dependencies; Databricks provides them."

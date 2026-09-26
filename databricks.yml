@@ -1,0 +1,60 @@
+# Databricks Asset Bundle: everything this project needs in Databricks, as code.
+#
+#   databricks bundle validate -t dev    check the files make sense
+#   databricks bundle deploy   -t dev    make the workspace match these files
+#   databricks bundle run bronze_ingest -t dev
+#
+# In normal use you don't run these by hand. GitHub Actions runs them:
+#   merge to main        -> deploy to dev   (.github/workflows/deploy.yml)
+#   tag v*  + approval   -> deploy to prod
+#
+# See ADR-007 and docs/runbooks/deploy_databricks.md.
+
+bundle:
+  name: care-reg-platform
+
+include:
+  - resources/*.yml
+
+# Our Python package, built into a wheel and uploaded on every deploy.
+# The jobs install it and call its entry points (pyproject.toml [project.scripts]).
+artifacts:
+  careplatform:
+    type: whl
+    path: .
+    build: python -c "import shutil; shutil.rmtree('dist', ignore_errors=True)" && python -m pip wheel . --no-deps --wheel-dir dist
+    # stamps a unique version on each build so serverless never reuses a cached older wheel
+    dynamic_version: true
+
+# The repo is synced to the workspace too; jobs read config/ from there.
+sync:
+  exclude:
+    - data/**
+    - notebooks/**
+    - source_repo_template/**
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for this environment (created once by infra/bootstrap_catalogs.sql)
+    default: care_reg_dev
+
+targets:
+  # One Free Edition workspace, two catalogs. In a company, dev and prod would be
+  # separate workspaces; the bundle would only change the host below.
+  dev:
+    default: true
+    variables:
+      catalog: care_reg_dev
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev
+
+  prod:
+    variables:
+      catalog: care_reg_prod
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/prod
+    resources:
+      jobs:
+        bronze_ingest:
+          schedule:
+            pause_status: UNPAUSED   # only prod runs on a schedule

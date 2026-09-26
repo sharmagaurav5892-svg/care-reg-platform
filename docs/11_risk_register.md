@@ -19,5 +19,8 @@ Likelihood and impact on a 1 (low) to 3 (high) scale. Score = likelihood x impac
 | R-13 | GitHub or BC Laws API outage or rate limit stops a load | 2 | 1 | 2 | Retries with backoff, rate limit wait, clear failure, watermark not moved so next run catches up | Data Engineer | Open |
 | R-14 | BC Laws API changes its URL scheme or format | 1 | 2 | 2 | Paths in settings.yaml not code, XML to HTML fallback, clear failure, BC and Ontario run separately | Data Engineer | Open |
 | R-15 | Mixing up BC and Ontario rules in answers | 2 | 3 | 6 | jurisdiction on every row (DQ-B-007), jurisdiction on graph entities (step 4), eval questions per province | AI Model Owner | Open |
+| R-16 | Databricks deploy token leaked or expires unnoticed | 1 | 2 | 2 | GitHub secret only, 90 day lifetime, EX-002 expiry, deploy fails loudly on 401 | Platform Owner | Open |
+| R-17 | Free Edition quota shuts compute for the day | 2 | 1 | 2 | One small daily job, `max_concurrent_runs: 1`, laptop mode still works | Data Engineer | Open |
+| R-18 | Change reaches prod without review | 1 | 3 | 3 | Prod only from tags, GitHub `prod` environment requires approval, branch protection on main | Platform Owner | Open |
 
 Reviewed at every release.

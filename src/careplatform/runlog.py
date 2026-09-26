@@ -15,6 +15,7 @@ link that makes record-level lineage work (docs/05_lineage.md).
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import uuid
 from contextlib import contextmanager
@@ -29,6 +30,10 @@ TABLE = "ops.run_log"
 
 
 def _git_commit() -> str | None:
+    # on Databricks there is no .git folder; the deploy passes the commit in (runtime.py)
+    env = os.getenv("CAREPLATFORM_GIT_COMMIT")
+    if env:
+        return env[:12]
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

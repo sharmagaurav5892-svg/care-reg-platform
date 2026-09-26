@@ -5,7 +5,8 @@ project:
   env: dev                      # dev | prod
 
 lakehouse:
-  mode: local                   # local | fabric
+  mode: local                   # local | databricks | fabric (jobs override with --mode)
+  databricks_catalog: care_reg_dev   # jobs override with --catalog (care_reg_prod in prod)
   local_root: ./data/lakehouse
   landing_root: ./data/landing
   fabric_root: null             # set to the OneLake abfss:// Tables path in fabric mode

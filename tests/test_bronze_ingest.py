@@ -44,7 +44,7 @@ def test_first_load(lakehouse_tmp, gh):
     assert set(bronze["source_id"]) == {"on_rha_2010", "on_oreg_166_11"}
     # landing files exist and lineage columns are filled
     for _, row in bronze.iterrows():
-        assert (lakehouse_tmp / row["landing_path"]).read_bytes() in (RHA, OREG)
+        assert (lakehouse.landing_root() / row["landing_path"]).read_bytes() in (RHA, OREG)
         assert row["source_version"] == fake.head
         assert row["remote_hash"] and row["source_system"] == "github"
         assert row["source_url"].startswith("https://github.com/gaurav/care-reg-source-docs/blob/")
@@ -117,7 +117,7 @@ def test_dq_failure_blocks_load_and_keeps_watermark(lakehouse_tmp, gh):
     first_head = fake.head
     # someone edits a landing file by hand: bronze can no longer be trusted
     row = lakehouse.read("bronze.raw_documents").iloc[0]
-    (lakehouse_tmp / row["landing_path"]).write_bytes(b"tampered")
+    (lakehouse.landing_root() / row["landing_path"]).write_bytes(b"tampered")
     fake.commit({**FILES, "regulations/on_rha_2010/new_schedule.pdf": b"%PDF new"})
 
     with pytest.raises(PipelineFailed, match="DQ-B-005"):

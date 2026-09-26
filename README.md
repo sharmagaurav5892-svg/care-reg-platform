@@ -77,6 +77,16 @@ Governance is also enforced in code, not just written down:
 - `config/dq_rules.yaml` holds every data quality rule. The pipeline reads rules from here.
 - `tests/test_governance_config.py` fails the build if a table is missing an owner, a rule points at a table that does not exist, or a classification is not in the approved list.
 
+## CI/CD
+
+```
+pull request ──▶ ci:     tests, governance checks, wheel build, bundle validate
+merge to main ──▶ deploy: tests ──▶ Databricks bundle deploy ──▶ care_reg_dev
+tag v*        ──▶ deploy: tests ──▶ approval ──▶ bundle deploy ──▶ care_reg_prod
+```
+
+Everything in Databricks (schemas, landing volume, jobs, the Python wheel) is defined in `databricks.yml` and `resources/`. Nothing is created by hand except the two catalogs (`infra/bootstrap_catalogs.sql`). Catalog descriptions, column comments and classification tags are published from `config/catalog.yaml` into Unity Catalog on every job run. Setup: [deploy runbook](docs/runbooks/deploy_databricks.md). Why: [ADR-007](docs/adr/ADR-007-databricks-bundles-cicd.md).
+
 ## Running it
 
 Two run modes, same code:
@@ -111,6 +121,7 @@ python -m careplatform.show ops.api_call_log       # every API call, with retrie
 |------|-------------|
 | 1 ✅ | Repo foundation, governance pack, catalog and DQ rules as code |
 | 2 ✅ | Bronze ingestion from two APIs (BC Laws, GitHub): connector contract, watermarks, run log, API audit log, DQ gate |
+| 2c ✅ | Databricks: Unity Catalog, serverless jobs, Asset Bundles, CI/CD with dev and prod (approval gated) |
 | 3 | Silver: PDF text extraction, cleaning, chunking, DQ checks |
 | 4 | Gold: embeddings, entity and relationship extraction |
 | 5 | Neo4j graph load and vector index |

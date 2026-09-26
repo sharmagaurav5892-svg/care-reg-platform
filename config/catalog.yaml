@@ -32,7 +32,7 @@ tables:
       - {name: source_ref,      type: string,    nullable: false, description: Where it lives in the source. Document id for BC Laws, repo path for GitHub.}
       - {name: source_version,  type: string,    nullable: true,  description: Version marker from the source. ETag or Last-Modified for BC Laws, commit SHA for GitHub.}
       - {name: remote_hash,     type: string,    nullable: true,  description: Hash the source gives before download (Git blob SHA). Null when the API has none.}
-      - {name: landing_path,    type: string,    nullable: false, description: Relative path under data/landing where the bytes were saved}
+      - {name: landing_path,    type: string,    nullable: false, description: Path under the landing root where the bytes were saved (data/landing locally, the bronze.landing volume on Databricks)}
       - {name: source_url,      type: string,    nullable: false, description: Link a person can open to see exactly what was loaded}
       - {name: doc_type,        type: string,    nullable: false, description: act | regulation | inspection_report}
       - {name: jurisdiction,    type: string,    nullable: false, description: ON or BC}

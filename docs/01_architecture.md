@@ -42,6 +42,8 @@ flowchart TB
 | Component | Tech | Cost |
 |-----------|------|------|
 | Source integration | BC Laws API and GitHub REST API, one shared HTTP client, one connector contract | $0 |
+| Cloud lakehouse | Databricks Free Edition: Unity Catalog, serverless jobs (ADR-007) | $0 |
+| Deployment | Databricks Asset Bundles via GitHub Actions, dev and prod targets | $0 |
 | Storage format | Delta Lake via `deltalake` (delta-rs) Python library | $0 |
 | Local query engine | DuckDB | $0 |
 | Cloud lakehouse (optional) | Microsoft Fabric lakehouse on OneLake, trial capacity | $0 for 60 days |
@@ -109,3 +111,4 @@ Notebooks stay thin on purpose. All logic lives in `src/` so it can be tested, r
 | [004](adr/ADR-004-no-raw-prompt-logging.md) | Do not store raw user questions in logs by default |
 | [005](adr/ADR-005-github-api-as-source.md) | Ingest Ontario documents through the GitHub REST API |
 | [006](adr/ADR-006-bc-laws-public-api.md) | Add British Columbia through the public BC Laws API |
+| [007](adr/ADR-007-databricks-bundles-cicd.md) | Run on Databricks, deployed by Asset Bundles through GitHub Actions |

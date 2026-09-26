@@ -96,7 +96,8 @@ Any time a policy is knowingly broken, it gets an entry here with an expiry date
 
 | ID | Policy | What is being allowed | Reason | Approved by | Expires |
 |----|--------|-----------------------|--------|-------------|---------|
-| EX-001 | 07 Security | Secrets stored in a local `.env` file instead of Azure Key Vault in local mode | Solo build, no shared infrastructure. `.env` is git-ignored. | Governance Council | When Fabric mode goes live |
+| EX-001 | 07 Security | Secrets stored in a local `.env` file instead of a vault in local mode | Solo build, no shared infrastructure. `.env` is git-ignored. On Databricks, secrets come from the `care-reg` secret scope. | Governance Council | When the laptop stops being used for runs |
+| EX-002 | 07 Security | CI/CD deploys with a personal access token instead of a service principal using OIDC (keyless) | Databricks Free Edition doesn't support workload identity federation. Token stored only as a GitHub secret, 90 day lifetime. | Governance Council | 90 days after token creation, or on moving to a paid workspace |
 
 ## 9. Standards referenced
 

@@ -51,7 +51,7 @@ File register. One row per unique source file pulled by any connector (BC Laws A
 | source_ref | string | no | Where it lives in the source. Document id for BC Laws |
 | source_version | string | yes | Version marker from the source. ETag or Last-Modified for BC Laws |
 | remote_hash | string | yes | Hash the source gives before download (Git blob SHA). Null when the API has none. |
-| landing_path | string | no | Relative path under data/landing where the bytes were saved |
+| landing_path | string | no | Path under the landing root where the bytes were saved (data/landing locally |
 | source_url | string | no | Link a person can open to see exactly what was loaded |
 | doc_type | string | no | act | regulation | inspection_report |
 | jurisdiction | string | no | ON or BC |

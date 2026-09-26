@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
-import duckdb
 import pandas as pd
 
 from careplatform import config, lakehouse
@@ -97,6 +96,7 @@ def _ratio(df, r):
     """Share of rows where a SQL boolean expression is true, computed with DuckDB."""
     if df.empty:
         return 1.0
+    import duckdb  # imported here so the package runs on Databricks without it for other checks
     con = duckdb.connect()
     con.register("t", df)
     return float(con.execute(

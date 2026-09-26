@@ -1,0 +1,52 @@
+# Option A, runner side (ADR-008): fetch BC Laws outside Databricks, land it, then register.
+#   05:30 Toronto daily, or Actions > fetch-bclaws > Run workflow.
+# Databricks Free Edition can't reach bclaws.gov.bc.ca; GitHub runners can (spike F4).
+
+name: fetch-bclaws
+
+on:
+  schedule:
+    - cron: "30 9 * * *"        # 09:30 UTC = 05:30 Toronto (04:30 in winter)
+  workflow_dispatch:
+
+concurrency:
+  group: fetch-bclaws
+  cancel-in-progress: false      # never cut an upload in half
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-land-register:
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      LANDING: dbfs:/Volumes/care_reg_dev/bronze/landing/incoming
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e . pandas pyarrow
+
+      - name: Fetch from BC Laws
+        run: python -m careplatform.ingestion.fetch_to_landing --out outbox --git-commit ${{ github.sha }}
+
+      - uses: databricks/setup-cli@main
+
+      - name: Upload to landing volume (manifest last)
+        run: |
+          batch=$(dirname "$(find outbox -name _manifest.json)")
+          dest="$LANDING/${batch#outbox/}"
+          databricks fs mkdir "$dest"
+          for f in "$batch"/*; do
+            [ "$(basename "$f")" = "_manifest.json" ] && continue
+            databricks fs cp "$f" "$dest/$(basename "$f")"
+          done
+          databricks fs cp "$batch/_manifest.json" "$dest/_manifest.json"
+          databricks fs ls "$dest"
+
+      - name: Register in bronze (runs the Databricks job and waits)
+        run: databricks bundle run bronze_ingest -t dev

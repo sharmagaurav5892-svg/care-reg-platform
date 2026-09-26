@@ -4,6 +4,7 @@
 # data never goes to git (docs/02 section 4)
 data/landing/*
 data/lakehouse/*
+data/outbox/
 !data/landing/.gitkeep
 !data/lakehouse/.gitkeep
 

@@ -6,7 +6,7 @@ One-time setup, then how deploys work day to day. See ADR-007 for why it's built
 
 ### 1. Workspace
 - Databricks Free Edition workspace, signed in with a personal account.
-- **Verify identity** (top right, LinkedIn). Without it, outbound internet is blocked and the BC Laws API can't be reached.
+- **Verify identity** (top right, LinkedIn). Free Edition still only allows outbound calls to a short allowlist (pypi.org, api.github.com). BC Laws is fetched outside Databricks by the `fetch-bclaws` workflow (ADR-008).
 
 ### 2. Catalogs (the only manual step)
 SQL Editor → Serverless Starter Warehouse → run `infra/bootstrap_catalogs.sql`.
@@ -74,6 +74,8 @@ Then add a `bronze_github` task to `resources/jobs.yml` with `--connector github
 | `401` / `invalid access token` | Token expired or wrong | New token (step 3), update the GitHub secret |
 | `catalog ... does not exist` | Bootstrap not run | Step 2 |
 | `already exists` on a schema | Schema was created by hand before the bundle | Drop it (empty) or `databricks bundle deployment bind` it |
-| Job fails reaching `bclaws.gov.bc.ca` | Identity not verified | Step 1 |
+| `Temporary failure in name resolution` for an external site | Free Edition egress allowlist | Fetch it outside Databricks and land it (ADR-008). Don't call it from a job. |
+| `fetch-bclaws` red at "Upload" | Token expired, or the volume path is wrong | Check the `DATABRICKS_TOKEN` secret, then `databricks fs ls dbfs:/Volumes/care_reg_dev/bronze/landing/` |
+| `register_bclaws` fails with `hash does not match` | A landed file was changed or corrupted after upload | Don't edit landed files. Delete that batch folder, then re-run `fetch-bclaws` |
 | Workspace compute unavailable | Free Edition daily quota hit | Wait until tomorrow |
    | `numpy.core.multiarray failed to import` (job task) | The wheel listed pandas/pyarrow/numpy, so pip upgraded one inside the job and broke the preinstalled set | Keep them out of `pyproject.toml` dependencies (enforced by `test_wheel_does_not_reinstall_runtime_libraries`) |

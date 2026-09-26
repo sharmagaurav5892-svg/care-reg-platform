@@ -69,7 +69,8 @@ class BCLawsConnector(SourceConnector):
 
         for src in approved:
             doc_id = src["document_id"]
-            last = json.loads(watermarks.get(self.source_system, doc_id) or "{}")
+            # full refresh never reads state, so it also runs where there is no lakehouse (fetch_to_landing)
+            last = {} if full_refresh else json.loads(watermarks.get(self.source_system, doc_id) or "{}")
             conditional = {}
             if not full_refresh:
                 if last.get("etag"):

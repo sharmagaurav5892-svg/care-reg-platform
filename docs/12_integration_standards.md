@@ -67,6 +67,8 @@ sequenceDiagram
 
 **What if the server ignores ETags?** Then it always sends 200 with the full document. We still don't store duplicates, because the pipeline hashes the bytes and skips content already in bronze. That costs bandwidth but never correctness. The test `test_server_without_caching_falls_back_to_content_hash` proves it.
 
+**What BC Laws actually does (tested 2026-09-26, ADR-008):** no `ETag`, and `Last-Modified` is always the current time, so conditional requests never produce a 304. Content is byte-stable between requests, so change detection for BC Laws is the content hash: download, hash, skip if the hash is already in bronze. The conditional request code stays, because it costs nothing and works if BC Laws adds ETags later.
+
 ## 4. How incremental loading works for GitHub
 
 ```mermaid

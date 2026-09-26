@@ -1,0 +1,53 @@
+# Jobs. Each task installs our wheel on serverless compute and calls an entry point.
+# The flags tell the code it's on Databricks and which catalog to use (src/careplatform/runtime.py).
+
+resources:
+  jobs:
+    bronze_ingest:
+      name: care-reg bronze ingest (${bundle.target})
+      description: Publish catalog metadata to Unity Catalog, then load BC legislation from the BC Laws API into bronze.
+
+      tasks:
+        - task_key: publish_catalog
+          environment_key: default
+          python_wheel_task:
+            package_name: careplatform
+            entry_point: careplatform-publish-catalog
+            parameters: [--mode, databricks, --catalog, "${var.catalog}",
+                         --config-dir, "${workspace.file_path}/config",
+                         --git-commit, "${bundle.git.commit}"]
+
+        - task_key: bronze_bclaws
+          depends_on:
+            - task_key: publish_catalog
+          environment_key: default
+          python_wheel_task:
+            package_name: careplatform
+            entry_point: careplatform-bronze
+            parameters: [--connector, bclaws,
+                         --mode, databricks, --catalog, "${var.catalog}",
+                         --config-dir, "${workspace.file_path}/config",
+                         --git-commit, "${bundle.git.commit}"]
+          # Ontario (github connector) is added as a parallel task once its
+          # secret scope is set up. See docs/runbooks/deploy_databricks.md.
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "2"
+            dependencies:
+              - ../dist/*.whl
+
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"     # 06:00 every day
+        timezone_id: America/Toronto
+        pause_status: PAUSED                        # prod target switches this on
+
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+
+      max_concurrent_runs: 1   # two loads at once could both move the same watermark
+      tags:
+        project: care-reg-platform
+        layer: bronze

@@ -7,7 +7,8 @@
 | Azure OpenAI key | `.env` (git-ignored), exception EX-001 | Azure Key Vault, read via managed identity |
 | Neo4j password | `.env` | Azure Key Vault |
 | Fallback provider key | `.env` | Azure Key Vault |
-| GitHub token | `.env` | Azure Key Vault |
+| GitHub token | `.env` | Databricks secret scope `care-reg` (key `github-token`) |
+| Databricks deploy token | Never on the laptop | GitHub Actions secret `DATABRICKS_TOKEN` only (EX-002) |
 
 Rules:
 
@@ -46,4 +47,6 @@ In Fabric mode these map to workspace roles (Admin, Member, Contributor, Viewer)
 | Every external API call and retry | `ops.api_call_log` |
 | Every model call | `gold.llm_call_log` |
 | Every config change | Git history and PRs |
+| Every deploy | GitHub Actions run history (who, which commit, which target, who approved prod) |
+| Every job run in Databricks | Job run history, and `ops.run_log.git_commit` |
 | Access changes | Fabric admin audit log (Fabric mode) |

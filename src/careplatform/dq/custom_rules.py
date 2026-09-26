@@ -26,9 +26,12 @@ def landing_hash_matches(df: pd.DataFrame, rule: dict) -> CheckOutcome:
     """The file on disk must still hash to its doc_id. Catches edited or corrupted landing files."""
     import hashlib
 
+    from careplatform import lakehouse
+
+    root = lakehouse.landing_root()
     bad = 0
     for _, row in df.iterrows():
-        path = config.REPO_ROOT / row["landing_path"]
+        path = root / row["landing_path"]
         if not path.exists() or hashlib.sha256(path.read_bytes()).hexdigest() != row["doc_id"]:
             bad += 1
     return CheckOutcome(bad == 0, float(bad), 0.0, bad)

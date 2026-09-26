@@ -1,8 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "careplatform"
-version = "0.1.0"
-description = "Governed data and AI platform over Ontario seniors care regulations"
+version = "0.2.0"
+description = "Governed data and AI platform over BC and Ontario seniors care legislation"
 requires-python = ">=3.11"
+# Only what the wheel needs on Databricks, where these are already installed.
+# Laptop-only tools (deltalake, duckdb, pytest...) live in requirements.txt.
+dependencies = [
+  "pyyaml>=6.0",
+  "requests>=2.31",
+  "pandas>=2.0",
+  "pyarrow>=14.0",
+]
+
+# Entry points the Databricks jobs call (resources/jobs.yml, python_wheel_task).
+[project.scripts]
+careplatform-bronze = "careplatform.ingestion.bronze_ingest:main"
+careplatform-publish-catalog = "careplatform.governance.publish_uc:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

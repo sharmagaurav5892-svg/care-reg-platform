@@ -17,7 +17,9 @@ For each connector, in order:
      change detection (commit watermark for GitHub, 304 Not Modified for
      BC Laws), and hands back only new or changed files.
   3. Hash each file (SHA-256 = doc_id). Same content already loaded? Skip.
-  4. Save bytes to data/landing/<system>/<source_id>/<doc_id[:12]>/<file>.
+  4. Save bytes to <landing>/<system>/<source_id>/<doc_id[:12]>/<file>, where
+     <landing> is data/landing locally or /Volumes/<catalog>/bronze/landing
+     on Databricks.
   5. Run DQ rules on bronze + the new rows. Any critical failure: stop,
      write nothing to bronze, keep landing files for debugging.
   6. Append new rows to bronze, THEN save the connector's watermarks.
@@ -34,7 +36,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from careplatform import config, lakehouse
+from careplatform import config, lakehouse, runtime
 from careplatform.connectors.base import SourceConnector
 from careplatform.dq.engine import run_checks
 from careplatform.ingestion import watermarks
@@ -72,7 +74,7 @@ def run(connector_name: str | None = None, full_refresh: bool = False,
                 return summary
 
             known_docs = set(existing["doc_id"])
-            landing_root = config.REPO_ROOT / config.settings()["lakehouse"]["landing_root"]
+            landing_root = lakehouse.landing_root()   # data/landing locally, the UC volume on Databricks
             now = datetime.now(timezone.utc)
             skipped = res.skipped
             rows = []
@@ -96,7 +98,7 @@ def run(connector_name: str | None = None, full_refresh: bool = False,
                     "source_ref": f.source_ref,
                     "source_version": f.source_version,
                     "remote_hash": f.remote_hash,
-                    "landing_path": Path(dest).relative_to(config.REPO_ROOT).as_posix(),
+                    "landing_path": Path(dest).relative_to(landing_root).as_posix(),
                     "source_url": f.source_url,
                     "doc_type": src["doc_type"],
                     "jurisdiction": src["jurisdiction"],
@@ -143,7 +145,9 @@ def main() -> None:
     p.add_argument("--connector", choices=["github", "bclaws"], help="run only this connector")
     p.add_argument("--full-refresh", action="store_true",
                    help="Ignore watermarks and re-check everything (identical content is still skipped).")
+    runtime.add_runtime_args(p)
     a = p.parse_args()
+    runtime.apply(a)
     results = run_all(full_refresh=a.full_refresh, only=a.connector)
     for s in results:
         print(f"\n=== bronze ingest: {s['connector']}")

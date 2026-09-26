@@ -1,3 +1,6 @@
+# CI: runs on every pull request and every push.
+# A red result blocks the pull request from being merged (branch protection on main).
+
 name: ci
 
 on:
@@ -14,6 +17,24 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install pyyaml pytest python-dotenv deltalake duckdb pandas pyarrow requests
+        run: pip install -r requirements.txt
       - name: Governance checks and tests
         run: pytest -q
+      - name: Wheel builds
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+
+  bundle-validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Validate the Databricks bundle against the workspace
+        run: |
+          if [ -z "$DATABRICKS_TOKEN" ]; then
+            echo "Databricks secrets not available (e.g. a pull request from a fork). Skipping."
+            exit 0
+          fi
+          databricks bundle validate -t dev

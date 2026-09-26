@@ -1,0 +1,30 @@
+# Unity Catalog structure, one schema per medallion layer, plus the landing volume.
+# The catalog itself is created once by infra/bootstrap_catalogs.sql.
+# Layer names must match allowed_layers in config/catalog.yaml (tests/test_bundle.py checks).
+
+resources:
+  schemas:
+    bronze:
+      catalog_name: ${var.catalog}
+      name: bronze
+      comment: Raw source files and file register. Append only. Never edited.
+    silver:
+      catalog_name: ${var.catalog}
+      name: silver
+      comment: Cleaned pages and chunks. Rebuilt from bronze. Must pass critical DQ rules.
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: Embeddings, entities, relationships, eval sets, LLM call logs. What the apps read.
+    ops:
+      catalog_name: ${var.catalog}
+      name: ops
+      comment: Run log, DQ results, API call log, watermarks. Audit trail.
+
+  volumes:
+    landing:
+      catalog_name: ${var.catalog}
+      schema_name: ${resources.schemas.bronze.name}
+      name: landing
+      volume_type: MANAGED
+      comment: Raw files exactly as returned by source APIs. Never edited. DQ-B-005 checks their hashes.

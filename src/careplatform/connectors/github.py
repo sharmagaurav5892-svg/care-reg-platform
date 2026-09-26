@@ -25,7 +25,6 @@ GitHub allows 60 requests an hour; with one, 5,000.
 """
 from __future__ import annotations
 
-import os
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import PurePosixPath
@@ -101,15 +100,15 @@ class GitHubConnector(SourceConnector):
 
     @classmethod
     def from_settings(cls, run_id: str) -> "GitHubConnector":
-        config.load_env()
         gh = config.settings()["ingestion"]["github"]
-        owner = os.getenv("GITHUB_OWNER") or gh["owner"]
+        owner = config.secret("GITHUB_OWNER") or gh["owner"]
         if not owner or owner.startswith("<"):
             raise RuntimeError(
                 "Set your GitHub username in config/settings.yaml "
                 "(ingestion.github.owner) or GITHUB_OWNER in .env"
             )
-        return cls(owner, gh["repo"], gh["branch"], run_id, token=os.getenv("GITHUB_TOKEN") or None)
+        # laptop: .env; Databricks: secret scope 'care-reg', key 'github-token'
+        return cls(owner, gh["repo"], gh["branch"], run_id, token=config.secret("GITHUB_TOKEN"))
 
     @property
     def scope(self) -> str:

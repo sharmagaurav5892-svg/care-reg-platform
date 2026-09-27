@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: fetch-bclaws
-  cancel-in-progress: false      # never cut an upload in half
+  group: databricks-dev          # shared with deploy-dev: never fetch/run while a deploy is swapping the wheel
+  cancel-in-progress: false
 
 permissions:
   contents: read

@@ -93,15 +93,23 @@ def _row_count_min(df, r):
 
 
 def _ratio(df, r):
-    """Share of rows where a SQL boolean expression is true, computed with DuckDB."""
+    """Share of rows where a SQL boolean expression is true.
+
+    The expression is SQL, so it runs on a SQL engine: DuckDB on a laptop,
+    Spark SQL on Databricks (where DuckDB isn't installed).
+    """
     if df.empty:
         return 1.0
-    import duckdb  # imported here so the package runs on Databricks without it for other checks
+    sql = f"SELECT avg(CASE WHEN ({r['expression']}) THEN 1.0 ELSE 0.0 END) AS v FROM t"
+    if lakehouse.mode() == "databricks":
+        # via the catalog schema so NULLs stay NULL (pandas would make them NaN, and NaN IS NULL is false)
+        sdf = lakehouse._spark_df(r["table"], df)
+        sdf.createOrReplaceTempView("t")
+        return float(lakehouse._spark().sql(sql).collect()[0]["v"])
+    import duckdb
     con = duckdb.connect()
     con.register("t", df)
-    return float(con.execute(
-        f"SELECT avg(CASE WHEN ({r['expression']}) THEN 1.0 ELSE 0.0 END) FROM t"
-    ).fetchone()[0])
+    return float(con.execute(sql).fetchone()[0])
 
 
 def _ratio_min(df, r):

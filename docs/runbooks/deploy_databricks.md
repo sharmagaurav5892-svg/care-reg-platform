@@ -79,3 +79,5 @@ Then add a `bronze_github` task to `resources/jobs.yml` with `--connector github
 | `register_bclaws` fails with `hash does not match` | A landed file was changed or corrupted after upload | Don't edit landed files. Delete that batch folder, then re-run `fetch-bclaws` |
 | Workspace compute unavailable | Free Edition daily quota hit | Wait until tomorrow |
    | `numpy.core.multiarray failed to import` (job task) | The wheel listed pandas/pyarrow/numpy, so pip upgraded one inside the job and broke the preinstalled set | Keep them out of `pyproject.toml` dependencies (enforced by `test_wheel_does_not_reinstall_runtime_libraries`) |
+   | `Library installation failed ... ERROR_NO_SUCH_FILE_OR_DIRECTORY` on the .whl | A job run started while a deploy was replacing the wheel (race) | Re-run after the deploy is green. Prevented by the shared `databricks-dev` concurrency group. |
+| `ModuleNotFoundError` for a laptop-only library (duckdb, deltalake) in a job | Code took a local-only path on Databricks | Branch on `lakehouse.mode()`; add a test that fakes databricks mode and blocks the import (see `tests/test_dq_on_databricks.py`) |

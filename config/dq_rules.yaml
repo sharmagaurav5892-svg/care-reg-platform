@@ -80,6 +80,9 @@ rules:
     values: [bclaws, github]
     description: Every row must come from a known connector.
 
+      # ---------------- SILVER ----------------
+  # silver.chunks rules are checked on ACTIVE chunks only; retired chunks are history.
+
   - id: DQ-S-001
     table: silver.document_units
     dimension: completeness
@@ -157,6 +160,14 @@ rules:
     column: unit_id
     references: silver.document_units.unit_id
     description: Every cross reference must belong to a unit we hold.
+
+  - id: DQ-S-010
+    table: silver.chunks
+    dimension: consistency
+    severity: critical
+    check: custom
+    column: chunker_version
+    description: Every active chunk must be built by the current chunking logic. A mix means a rebuild stopped halfway and search would return two styles of the same law.
 
   # ---------------- GOLD ----------------
   - id: DQ-G-001

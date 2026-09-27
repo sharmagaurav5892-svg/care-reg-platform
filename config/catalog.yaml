@@ -69,33 +69,38 @@ tables:
       - {name: history_note,      type: string,    nullable: true,  description: Enactment and amendment notes from the source, including notes of repealed subsections}
       - {name: is_repealed,       type: boolean,   nullable: false, description: True when the whole unit is repealed. Kept for the record, never chunked.}
       - {name: extraction_method, type: string,    nullable: false, description: xml | pypdf}
-      - {name: valid_from,        type: timestamp, nullable: false, description: UTC time this version of the text became current in the platform}
+      - {name: valid_from,        type: timestamp, nullable: false, description: "UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009)."}
       - {name: valid_to,          type: timestamp, nullable: true,  description: UTC time it was replaced. Null while current.}
       - {name: is_current,        type: boolean,   nullable: false, description: True for the version in force now. One per source_id + unit_ref.}
       - {name: load_id,           type: string,    nullable: false, description: run_id that wrote this version}
 
+
   - name: silver.chunks
     layer: silver
     domain: regulations
-    description: Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. The unit everything downstream works on.
+    description: Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. Rows are never deleted; replaced chunks are retired (is_active false), so gold knows exactly what to add and what to remove.
     classification: Public
     retention_days: 365
-    grain: one row per chunk
+    grain: one row per chunk (active or retired)
     primary_key: [chunk_id]
-    write_mode: overwrite
+    write_mode: merge
     columns:
-      - {name: chunk_id,       type: string,  nullable: false, description: "SHA-256 of unit_id + chunk_index. Stable while the unit's text is unchanged, so gold is not rebuilt for nothing."}
-      - {name: unit_id,        type: string,  nullable: false, description: FK to silver.document_units}
-      - {name: doc_id,         type: string,  nullable: false, description: FK to bronze.raw_documents}
-      - {name: source_id,      type: string,  nullable: false, description: Key into config/sources.yaml}
-      - {name: unit_ref,       type: string,  nullable: false, description: "Citation shown with answers, e.g. s. 43"}
-      - {name: chunk_index,    type: int,     nullable: false, description: 0 for a whole unit; 0, 1, 2 when a long unit is split}
-      - {name: context_header, type: string,  nullable: false, description: "Label put in front of the text, e.g. [BC | Residential Care Regulation | Part 4 > Division 2 | s. 43 Fire drills]"}
-      - {name: text,           type: string,  nullable: false, description: context_header + chunk text. This is what gets embedded and sent to the LLM.}
-      - {name: token_estimate, type: int,     nullable: false, description: Estimated tokens of text (header included)}
-      - {name: text_hash,      type: string,  nullable: false, description: SHA-256 of normalized text, for duplicate checks}
-      - {name: pii_flag,       type: boolean, nullable: false, description: True if PII scan found something. Excluded from gold.}
-      - {name: load_id,        type: string,  nullable: false, description: run_id that produced the row}
+      - {name: chunk_id,        type: string,    nullable: false, description: "SHA-256 of unit_id + chunk_index + chunker_version. Stable while the text and the chunking logic are unchanged, so gold is not rebuilt for nothing."}
+      - {name: unit_id,         type: string,    nullable: false, description: FK to silver.document_units}
+      - {name: doc_id,          type: string,    nullable: false, description: FK to bronze.raw_documents}
+      - {name: source_id,       type: string,    nullable: false, description: Key into config/sources.yaml}
+      - {name: unit_ref,        type: string,    nullable: false, description: "Citation shown with answers, e.g. s. 43"}
+      - {name: chunk_index,     type: int,       nullable: false, description: 0 for a whole unit; 0, 1, 2 when a long unit is split}
+      - {name: context_header,  type: string,    nullable: false, description: "Label put in front of the text, e.g. [BC | Residential Care Regulation | Part 4 > Division 2 | s. 43 Fire drills]"}
+      - {name: text,            type: string,    nullable: false, description: context_header + chunk text. This is what gets embedded and sent to the LLM.}
+      - {name: token_estimate,  type: int,       nullable: false, description: Estimated tokens of text (header included)}
+      - {name: text_hash,       type: string,    nullable: false, description: SHA-256 of normalized text, for duplicate checks}
+      - {name: pii_flag,        type: boolean,   nullable: false, description: True if PII scan found something. Excluded from gold.}
+      - {name: chunker_version, type: string,    nullable: false, description: Version of the chunking logic that built it (settings chunking.chunker_version). Bumping it rebuilds every chunk.}
+      - {name: is_active,       type: boolean,   nullable: false, description: True while the chunk reflects current, live law. Gold embeds active chunks and removes retired ones.}
+      - {name: retired_at,      type: timestamp, nullable: true,  description: UTC time it stopped being active (text amended, unit repealed or removed, or chunker_version bumped)}
+      - {name: load_id,         type: string,    nullable: false, description: run_id that created the chunk. Unchanged chunks keep their original load_id.}
+
 
   - name: silver.cross_references
     layer: silver

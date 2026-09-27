@@ -40,6 +40,9 @@ chunking:
   # vocabulary on Databricks Free Edition, and it counts for OpenAI models, not Gemini or Claude.
   # Real billed tokens come from the model responses (gold.llm_call_log).
   chars_per_token: 4
+    # Bump when the chunking or header logic changes: every chunk gets a new id, old ones are retired,
+  # gold re-embeds. A deliberate, reviewed, one-line decision (ADR-009).
+  chunker_version: "1"
 
 models:
   chat_deployment: gpt-4.1-mini

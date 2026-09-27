@@ -50,3 +50,44 @@ def rule_ids_exist(df: pd.DataFrame, rule: dict) -> CheckOutcome:
     known = {r["id"] for r in config.dq_rules()["rules"]}
     bad = int((~df["rule_id"].isin(known)).sum())
     return CheckOutcome(bad == 0, float(bad), 0.0, bad)
+
+
+
+# ---------------- silver ----------------
+
+@custom("DQ-S-005")
+def few_duplicate_chunks(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """Share of chunks whose text_hash appears more than once."""
+    if df.empty:
+        return CheckOutcome(True, 0.0, rule["threshold"], 0)
+    dupes = int(df["text_hash"].duplicated(keep=False).sum())
+    share = dupes / len(df)
+    return CheckOutcome(share <= rule["threshold"], round(share, 4), rule["threshold"], dupes)
+
+
+@custom("DQ-S-007")
+def one_current_version(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """No source_id + unit_ref may have two current rows."""
+    cur = df[df["is_current"].astype(bool)]
+    bad = int(cur.duplicated(["source_id", "unit_ref"], keep=False).sum())
+    return CheckOutcome(bad == 0, float(bad), 0.0, bad)
+
+
+@custom("DQ-S-008")
+def chunks_only_from_live_units(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """Every chunk's unit must be current and not repealed."""
+    from careplatform import lakehouse
+
+    units = lakehouse.read("silver.document_units")
+    live = set(units.loc[units["is_current"].astype(bool) & ~units["is_repealed"].astype(bool), "unit_id"])
+    bad = int((~df["unit_id"].isin(live)).sum())
+    return CheckOutcome(bad == 0, float(bad), 0.0, bad)
+    
+
+@custom("DQ-S-010")
+def chunks_built_by_current_logic(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """Every (active) chunk carries the current chunker_version."""
+    from careplatform.silver.build_silver import chunker_version
+
+    bad = int((df["chunker_version"].astype(str) != chunker_version()).sum())
+    return CheckOutcome(bad == 0, float(bad), 0.0, bad)

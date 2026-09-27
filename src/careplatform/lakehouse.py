@@ -223,6 +223,18 @@ def append(name: str, df: pd.DataFrame) -> int:
     return len(df)
 
 
+def overwrite(name: str, df: pd.DataFrame) -> int:
+    """Replace the whole table. For derived tables that are rebuilt every run (silver.chunks)."""
+    if mode() == "databricks":
+        if not exists(name):
+            _uc_create(name)
+        _spark_df(name, df).write.mode("overwrite").saveAsTable(uc_name(name))
+        return len(df)
+    from deltalake import write_deltalake
+    write_deltalake(table_path(name), to_arrow(name, df), mode="overwrite")
+    return len(df)
+
+    
 def upsert(name: str, df: pd.DataFrame) -> int:
     """Insert new rows, update rows whose primary key already exists."""
     if df.empty:

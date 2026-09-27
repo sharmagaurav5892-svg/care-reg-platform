@@ -18,7 +18,7 @@
 |-------|-------|--------|----------------|------------------|-------|----------|
 | [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 8 |
 | [silver.document_units](#silverdocument_units) | silver | regulations | Public | 1825 | one row per unit per version of its text | 2 |
-| [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk | 6 |
+| [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk (active or retired) | 7 |
 | [silver.cross_references](#silvercross_references) | silver | regulations | Public | 1825 | one row per link per unit version | 1 |
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model | 2 |
 | [gold.entities](#goldentities) | gold | regulations | Public | 365 | one row per entity mention per chunk | 1 |
@@ -103,7 +103,7 @@ One row per version of a section (XML) or page (PDF). History is kept (SCD2), so
 | history_note | string | yes | Enactment and amendment notes from the source |
 | is_repealed | boolean | no | True when the whole unit is repealed. Kept for the record |
 | extraction_method | string | no | xml | pypdf |
-| valid_from | timestamp | no | UTC time this version of the text became current in the platform |
+| valid_from | timestamp | no | UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009). |
 | valid_to | timestamp | yes | UTC time it was replaced. Null while current. |
 | is_current | boolean | no | True for the version in force now. One per source_id + unit_ref. |
 | load_id | string | no | run_id that wrote this version |
@@ -117,19 +117,19 @@ One row per version of a section (XML) or page (PDF). History is kept (SCD2), so
 
 ## silver.chunks
 
-Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. The unit everything downstream works on.
+Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. Rows are never deleted; replaced chunks are retired (is_active false), so gold knows exactly what to add and what to remove.
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
 - **Classification:** Public  
 - **Retention:** 365 days  
-- **Grain:** one row per chunk  
+- **Grain:** one row per chunk (active or retired)  
 - **Primary key:** chunk_id  
-- **Write mode:** overwrite
+- **Write mode:** merge
 
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
-| chunk_id | string | no | SHA-256 of unit_id + chunk_index. Stable while the unit's text is unchanged, so gold is not rebuilt for nothing. |
+| chunk_id | string | no | SHA-256 of unit_id + chunk_index + chunker_version. Stable while the text and the chunking logic are unchanged, so gold is not rebuilt for nothing. |
 | unit_id | string | no | FK to silver.document_units |
 | doc_id | string | no | FK to bronze.raw_documents |
 | source_id | string | no | Key into config/sources.yaml |
@@ -140,7 +140,10 @@ Retrieval chunks built from current, non-repealed units. Usually one per section
 | token_estimate | int | no | Estimated tokens of text (header included) |
 | text_hash | string | no | SHA-256 of normalized text |
 | pii_flag | boolean | no | True if PII scan found something. Excluded from gold. |
-| load_id | string | no | run_id that produced the row |
+| chunker_version | string | no | Version of the chunking logic that built it (settings chunking.chunker_version). Bumping it rebuilds every chunk. |
+| is_active | boolean | no | True while the chunk reflects current |
+| retired_at | timestamp | yes | UTC time it stopped being active (text amended |
+| load_id | string | no | run_id that created the chunk. Unchanged chunks keep their original load_id. |
 
 **Data quality rules**
 
@@ -152,6 +155,7 @@ Retrieval chunks built from current, non-repealed units. Usually one per section
 | DQ-S-005 | warning | uniqueness | Duplicate chunk text above 5 percent points to repeated headers or a chunking bug. |
 | DQ-S-006 | warning | validity | PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold. |
 | DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law. |
+| DQ-S-010 | critical | consistency | Every active chunk must be built by the current chunking logic. A mix means a rebuild stopped halfway and search would return two styles of the same law. |
 
 ## silver.cross_references
 

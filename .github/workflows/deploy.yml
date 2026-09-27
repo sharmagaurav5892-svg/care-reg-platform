@@ -35,6 +35,9 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: dev
+    concurrency:
+      group: databricks-dev      # shared with fetch-bclaws
+      cancel-in-progress: false
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

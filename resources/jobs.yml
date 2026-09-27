@@ -44,6 +44,19 @@ resources:
                          --config-dir, "${workspace.file_path}/config",
                          --git-commit, "${bundle.git.commit}"]
 
+
+                         
+        - task_key: gold_embeddings
+          depends_on:
+            - task_key: silver_bclaws
+          environment_key: default
+          python_wheel_task:
+            package_name: careplatform
+            entry_point: careplatform-embed
+            parameters: [--mode, databricks, --catalog, "${var.catalog}",
+                         --config-dir, "${workspace.file_path}/config",
+                         --git-commit, "${bundle.git.commit}"]
+
       environments:
         - environment_key: default
           spec:

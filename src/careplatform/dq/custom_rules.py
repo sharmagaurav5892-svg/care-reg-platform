@@ -91,3 +91,37 @@ def chunks_built_by_current_logic(df: pd.DataFrame, rule: dict) -> CheckOutcome:
 
     bad = int((df["chunker_version"].astype(str) != chunker_version()).sum())
     return CheckOutcome(bad == 0, float(bad), 0.0, bad)
+
+
+
+    
+
+# ---------------- gold ----------------
+
+def _wanted_chunk_ids() -> set:
+    from careplatform import lakehouse
+    from careplatform.gold.embed_chunks import wanted_chunks
+    return set(wanted_chunks(lakehouse.read("silver.chunks"))["chunk_id"])
+
+
+@custom("DQ-G-001")
+def every_wanted_chunk_is_embedded(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """df = active embeddings. Share of active, non-PII chunks that have one."""
+    wanted = _wanted_chunk_ids()
+    missing = len(wanted - set(df["chunk_id"]))
+    coverage = 1.0 if not wanted else round(1 - missing / len(wanted), 4)
+    return CheckOutcome(coverage >= rule["threshold"], coverage, rule["threshold"], missing)
+
+
+@custom("DQ-G-002")
+def vectors_have_configured_length(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    dim = config.settings()["models"]["embeddings"]["dim"]
+    lengths = df["vector"].map(len) if len(df) else pd.Series(dtype=int)
+    bad = int(((df["embedding_dim"] != dim) | (lengths != dim)).sum()) if len(df) else 0
+    return CheckOutcome(bad == 0, float(bad), float(dim), bad)
+
+
+@custom("DQ-G-010")
+def no_active_vector_for_retired_chunk(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    bad = int((~df["chunk_id"].isin(_wanted_chunk_ids())).sum()) if len(df) else 0
+    return CheckOutcome(bad == 0, float(bad), 0.0, bad)

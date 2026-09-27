@@ -177,7 +177,7 @@ rules:
     check: custom
     column: chunk_id
     threshold: 1.0
-    description: Missing embeddings mean silently missing answers.
+    description: Every active, non-PII chunk must have an active embedding. A missing one is law the search can never find, with no error anywhere.
 
   - id: DQ-G-002
     table: gold.chunk_embeddings
@@ -185,7 +185,7 @@ rules:
     severity: critical
     check: custom
     column: embedding_dim
-    description: Vector length must match the configured embedding model.
+    description: Vector length must match the configured embedding model. A different length means vectors from two models got mixed.
 
   - id: DQ-G-003
     table: gold.entities
@@ -248,6 +248,14 @@ rules:
     column: question_id
     references: gold.eval_questions.question_id
     description: Every result must belong to a known gold question.
+
+  - id: DQ-G-010
+    table: gold.chunk_embeddings
+    dimension: consistency
+    severity: critical
+    check: custom
+    column: chunk_id
+    description: No active embedding may belong to a chunk that is retired or flagged for PII. Otherwise search could return amended, repealed or personal text.
 
   # ---------------- OPS ----------------
   - id: DQ-O-002

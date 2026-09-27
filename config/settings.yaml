@@ -32,11 +32,17 @@ http:
   max_rate_limit_wait_seconds: 900     # wait up to 15 min for a rate limit reset, then fail
 
 chunking:
+  # BC Laws XML: one chunk per section, long sections split at subsection boundaries (ADR-009)
   target_tokens: 600
-  overlap_tokens: 80
-  min_tokens: 50
   max_tokens: 1200
-  tokenizer: cl100k_base
+  min_tokens: 20
+  # Token counts are estimates: characters / chars_per_token. tiktoken can't download its
+  # vocabulary on Databricks Free Edition, and it counts for OpenAI models, not Gemini or Claude.
+  # Real billed tokens come from the model responses (gold.llm_call_log).
+  chars_per_token: 4
+    # Bump when the chunking or header logic changes: every chunk gets a new id, old ones are retired,
+  # gold re-embeds. A deliberate, reviewed, one-line decision (ADR-009).
+  chunker_version: "1"
 
 models:
   chat_deployment: gpt-4.1-mini

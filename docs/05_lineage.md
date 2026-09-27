@@ -18,7 +18,8 @@ Every row in bronze, silver and gold carries these, and the test suite enforces 
 | `load_id` | every bronze, silver, gold row | `ops.run_log.run_id`, which has git commit and config hash |
 | `doc_id` | bronze, silver | the file, by its SHA-256 |
 | `page_start`, `page_end` | `silver.chunks` | pages in the original file |
-| `chunk_id` | silver, gold, Neo4j nodes | the chunk |
+| `unit_id` | `silver.chunks`, `silver.cross_references` | the exact version of the section (`silver.document_units`, SCD2) |
+| `unit_ref` | `silver.document_units`, `silver.chunks` | the citation, e.g. `s. 12` or `Sch. B, s. 1` (sections for XML, pages for PDF) |
 | `source_chunk_id` | `gold.entities`, `gold.relationships` | the chunk the LLM read to extract it |
 | `prompt_version` | gold extraction tables | the exact prompt file used |
 | `retrieved_chunk_ids` | `gold.eval_results` | what the retriever returned for that answer |
@@ -30,8 +31,9 @@ flowchart RL
     A[Answer in the app] -->|retrieved_chunk_ids| C[silver.chunks]
     A -->|graph path| E[gold.entities]
     E -->|source_chunk_id| C
-    C -->|doc_id + page_start| B[bronze.raw_documents]
-    B -->|landing_path| F[Original PDF, page N]
+    C -->|unit_id| U[silver.document_units<br/>section version, valid_from/to]
+    U -->|doc_id| B[bronze.raw_documents]
+    B -->|landing_path| F[Original XML file in the landing volume]
     C -->|load_id| R[ops.run_log]
     R --> G[git commit + config hash]
 ```
@@ -39,17 +41,18 @@ flowchart RL
 Example trace query (DuckDB, step 3 onward):
 
 ```sql
-SELECT c.chunk_id, c.section_ref, c.page_start, b.file_name, b.source_url,
-       r.git_commit, r.config_hash, r.started_at
+SELECT c.chunk_id, c.unit_ref, c.is_active, u.valid_from, u.valid_to,
+       b.file_name, b.source_url, r.git_commit, r.config_hash, r.started_at
 FROM silver.chunks c
-JOIN bronze.raw_documents b ON b.doc_id = c.doc_id
-JOIN ops.run_log r         ON r.run_id = c.load_id
+JOIN silver.document_units u ON u.unit_id = c.unit_id
+JOIN bronze.raw_documents b  ON b.doc_id = u.doc_id
+JOIN ops.run_log r           ON r.run_id = c.load_id
 WHERE c.chunk_id = :chunk_id;
 ```
 
 ## 4. In Neo4j
 
-Every `Chunk` node stores `chunk_id`, `doc_id`, `page_start` and `load_id`. Every entity node has a `MENTIONED_IN` edge to the chunks it came from. So a graph answer can always show its source pages.
+Every `Chunk` node stores `chunk_id`, `unit_id`, `unit_ref`,`doc_id` and `load_id`. Every entity node has a `MENTIONED_IN` edge to the chunks it came from. So a graph answer can always show its source section.
 
 ## 5. What the app shows
 

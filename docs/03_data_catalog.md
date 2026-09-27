@@ -17,8 +17,9 @@
 | Table | Layer | Domain | Classification | Retention (days) | Grain | DQ rules |
 |-------|-------|--------|----------------|------------------|-------|----------|
 | [bronze.raw_documents](#bronzeraw_documents) | bronze | regulations | Public | 1825 | one row per unique file (by content hash) | 8 |
-| [silver.document_pages](#silverdocument_pages) | silver | regulations | Public | 365 | one row per document page | 1 |
-| [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk | 5 |
+| [silver.document_units](#silverdocument_units) | silver | regulations | Public | 1825 | one row per unit per version of its text | 2 |
+| [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk (active or retired) | 7 |
+| [silver.cross_references](#silvercross_references) | silver | regulations | Public | 1825 | one row per link per unit version | 1 |
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model | 2 |
 | [gold.entities](#goldentities) | gold | regulations | Public | 365 | one row per entity mention per chunk | 1 |
 | [gold.relationships](#goldrelationships) | gold | regulations | Public | 365 | one row per relationship mention per chunk | 2 |
@@ -73,68 +74,117 @@ File register. One row per unique source file pulled by any connector (BC Laws A
 | DQ-B-007 | critical | validity | Only the two provinces in scope. Also catches the YAML ON-becomes-true trap at the data level. |
 | DQ-B-008 | critical | validity | Every row must come from a known connector. |
 
-## silver.document_pages
+## silver.document_units
 
-Extracted text per page, before chunking.
+One row per version of a section (XML) or page (PDF). History is kept (SCD2), so amended and repealed text is never lost. Only is_current rows feed chunks.
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
 - **Classification:** Public  
-- **Retention:** 365 days  
-- **Grain:** one row per document page  
-- **Primary key:** doc_id, page_no  
-- **Write mode:** overwrite_partition
+- **Retention:** 1825 days  
+- **Grain:** one row per unit per version of its text  
+- **Primary key:** unit_id  
+- **Write mode:** merge
 
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
-| doc_id | string | no | FK to bronze.raw_documents |
-| page_no | int | no | 1-based page number |
-| text | string | yes | Extracted text |
+| unit_id | string | no | SHA-256 of source_id + unit_ref + text_hash. Same text, same id. |
+| source_id | string | no | Key into config/sources.yaml. Stable across versions of the law. |
+| doc_id | string | no | FK to bronze.raw_documents. The document version this text first appeared in. |
+| unit_type | string | no | section | page |
+| unit_ref | string | no | Citation-ready reference, unique within a source. e.g. s. 12, Sch. 2, s. 1, p. 7 |
+| unit_order | int | no | Position in the document |
+| context_path | string | yes | Where the unit sits, e.g. Part 4 Care and Supervision > Division 2 Staffing |
+| heading | string | yes | Section heading (marginal note). Null for schedule sections and pages. |
+| text | string | yes | Clean text with subsection numbers inline. Repealed subsections removed. Tables rendered row by row. |
 | char_count | int | no | Length of text |
-| extraction_method | string | no | pypdf | html |
-| load_id | string | no | run_id that produced the row |
+| token_estimate | int | no | char_count / settings chunking.chars_per_token. An estimate, not a model count (ADR-009). |
+| text_hash | string | no | SHA-256 of text. How a changed section is detected between versions. |
+| history_note | string | yes | Enactment and amendment notes from the source |
+| is_repealed | boolean | no | True when the whole unit is repealed. Kept for the record |
+| extraction_method | string | no | xml | pypdf |
+| valid_from | timestamp | no | UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009). |
+| valid_to | timestamp | yes | UTC time it was replaced. Null while current. |
+| is_current | boolean | no | True for the version in force now. One per source_id + unit_ref. |
+| load_id | string | no | run_id that wrote this version |
 
 **Data quality rules**
 
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
-| DQ-S-001 | warning | completeness | At least 95 percent of pages should yield text. Lower usually means scanned PDFs that need OCR. |
+| DQ-S-001 | critical | completeness | Every unit that is still law must have text. An empty one means the parser missed the markup, and that law would silently vanish from answers. |
+| DQ-S-007 | critical | uniqueness | Exactly one current version per source_id + unit_ref. Two current versions means answers could quote amended law. |
 
 ## silver.chunks
 
-Cleaned text chunks with section references. The unit everything downstream works on.
+Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. Rows are never deleted; replaced chunks are retired (is_active false), so gold knows exactly what to add and what to remove.
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
 - **Classification:** Public  
 - **Retention:** 365 days  
-- **Grain:** one row per chunk  
+- **Grain:** one row per chunk (active or retired)  
 - **Primary key:** chunk_id  
-- **Write mode:** overwrite_partition
+- **Write mode:** merge
 
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
-| chunk_id | string | no | doc_id + chunk_index hash |
+| chunk_id | string | no | SHA-256 of unit_id + chunk_index + chunker_version. Stable while the text and the chunking logic are unchanged, so gold is not rebuilt for nothing. |
+| unit_id | string | no | FK to silver.document_units |
 | doc_id | string | no | FK to bronze.raw_documents |
-| chunk_index | int | no | Order within the document |
-| page_start | int | no | First page the chunk covers |
-| page_end | int | no | Last page the chunk covers |
-| section_ref | string | yes | Section number if detected, e.g. s. 27(1) |
-| text | string | no | Chunk text |
-| token_count | int | no | Tokens by tiktoken cl100k_base |
+| source_id | string | no | Key into config/sources.yaml |
+| unit_ref | string | no | Citation shown with answers, e.g. s. 43 |
+| chunk_index | int | no | 0 for a whole unit; 0 |
+| context_header | string | no | Label put in front of the text, e.g. [BC | Residential Care Regulation | Part 4 > Division 2 | s. 43 Fire drills] |
+| text | string | no | context_header + chunk text. This is what gets embedded and sent to the LLM. |
+| token_estimate | int | no | Estimated tokens of text (header included) |
 | text_hash | string | no | SHA-256 of normalized text |
 | pii_flag | boolean | no | True if PII scan found something. Excluded from gold. |
-| load_id | string | no | run_id that produced the row |
+| chunker_version | string | no | Version of the chunking logic that built it (settings chunking.chunker_version). Bumping it rebuilds every chunk. |
+| is_active | boolean | no | True while the chunk reflects current |
+| retired_at | timestamp | yes | UTC time it stopped being active (text amended |
+| load_id | string | no | run_id that created the chunk. Unchanged chunks keep their original load_id. |
 
 **Data quality rules**
 
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
 | DQ-S-002 | critical | completeness | No empty chunks. |
-| DQ-S-003 | warning | validity | Chunks should fall in the target size band. Outliers hurt retrieval. |
+| DQ-S-003 | warning | validity | Chunks should fall in the size band. Lower bound is 20, not 50, because short sections are valid law (25 of 279 BC sections are under 50 tokens, profiled 2026-09-26); the context header alone is about 20, so below that means a parsing fault. |
 | DQ-S-004 | critical | consistency | Every chunk must trace back to a registered file. |
 | DQ-S-005 | warning | uniqueness | Duplicate chunk text above 5 percent points to repeated headers or a chunking bug. |
 | DQ-S-006 | warning | validity | PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold. |
+| DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law. |
+| DQ-S-010 | critical | consistency | Every active chunk must be built by the current chunking logic. A mix means a rebuild stopped halfway and search would return two styles of the same law. |
+
+## silver.cross_references
+
+Links from a unit to another law, read from the source markup (no LLM). Feeds REFERENCES edges in the knowledge graph.
+
+- **Owner:** Regulations Data Owner  
+- **Steward:** Regulations Data Steward  
+- **Classification:** Public  
+- **Retention:** 1825 days  
+- **Grain:** one row per link per unit version  
+- **Primary key:** ref_id  
+- **Write mode:** merge
+
+| Column | Type | Nullable | Description |
+|--------|------|:--------:|-------------|
+| ref_id | string | no | SHA-256 of unit_id + position of the link in the unit |
+| unit_id | string | no | FK to silver.document_units (the unit containing the link) |
+| source_id | string | no | Law the link is in |
+| unit_ref | string | no | Unit the link is in |
+| target_href | string | no | Link target as published, e.g. /legislation/96405_01 |
+| target_doc_id | string | yes | BC document id parsed from the href, e.g. 96405_01. Null if the link is not to legislation. |
+| target_text | string | no | Link text, e.g. Representation Agreement Act |
+| load_id | string | no | run_id that produced the row |
+
+**Data quality rules**
+
+| Rule | Severity | Dimension | Description |
+|------|----------|-----------|-------------|
+| DQ-S-009 | critical | consistency | Every cross reference must belong to a unit we hold. |
 
 ## gold.chunk_embeddings
 

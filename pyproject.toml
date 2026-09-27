@@ -19,6 +19,7 @@ dependencies = [
 careplatform-bronze = "careplatform.ingestion.bronze_ingest:main"
 careplatform-publish-catalog = "careplatform.governance.publish_uc:main"
 careplatform-register = "careplatform.ingestion.register_landing:main"
+careplatform-silver = "careplatform.silver.build_silver:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

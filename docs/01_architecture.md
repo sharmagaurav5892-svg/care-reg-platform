@@ -24,8 +24,9 @@ flowchart TB
     BC -.->|every call| AL[ops.api_call_log]
     GH -.->|every call| AL
     L -->|register + hash| B[bronze.raw_documents]
-    B -->|extract text| SP[silver.document_pages]
-    SP -->|clean + chunk| SC[silver.chunks]
+    B -->|parse XML sections| SU[silver.document_units<br/>SCD2 history]
+    SU -->|current, not repealed| SC[silver.chunks<br/>active / retired]
+    SU -->|links in markup| SX[silver.cross_references]
     SC -->|embed| GE[gold.chunk_embeddings]
     SC -->|LLM extraction| GN[gold.entities]
     SC -->|LLM extraction| GR[gold.relationships]

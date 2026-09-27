@@ -5,7 +5,7 @@ resources:
   jobs:
     bronze_ingest:
       name: care-reg bronze ingest (${bundle.target})
-      description: Publish catalog metadata to Unity Catalog, then register BC Laws batches from the landing volume into bronze.
+      description: Publish catalog metadata to Unity Catalog, register BC Laws batches from the landing volume into bronze, then build silver (sections, chunks, cross references).
 
       tasks:
         - task_key: publish_catalog
@@ -30,6 +30,19 @@ resources:
                          --git-commit, "${bundle.git.commit}"]
           # Ontario (github connector) is added as a parallel task once its
           # secret scope is set up. See docs/runbooks/deploy_databricks.md.
+
+          
+        - task_key: silver_bclaws
+          depends_on:
+            - task_key: register_bclaws
+          environment_key: default
+          python_wheel_task:
+            package_name: careplatform
+            entry_point: careplatform-silver
+            parameters: [--connector, bclaws,
+                         --mode, databricks, --catalog, "${var.catalog}",
+                         --config-dir, "${workspace.file_path}/config",
+                         --git-commit, "${bundle.git.commit}"]
 
       environments:
         - environment_key: default

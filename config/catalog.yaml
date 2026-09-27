@@ -41,45 +41,80 @@ tables:
       - {name: ingested_at,     type: timestamp, nullable: false, description: UTC time the row was written}
       - {name: load_id,         type: string,    nullable: false, description: run_id from ops.run_log that loaded this file}
 
-  # ---------------- SILVER ----------------
-  - name: silver.document_pages
+    # ---------------- SILVER ----------------
+  # Silver turns raw files into clean, citable units of law (ADR-009).
+  # BC Laws XML gives sections; PDFs (Ontario, later) give pages. One table holds both.
+  - name: silver.document_units
     layer: silver
     domain: regulations
-    description: Extracted text per page, before chunking.
+    description: One row per version of a section (XML) or page (PDF). History is kept (SCD2), so amended and repealed text is never lost. Only is_current rows feed chunks.
     classification: Public
-    retention_days: 365
-    grain: one row per document page
-    primary_key: [doc_id, page_no]
-    write_mode: overwrite_partition
+    retention_days: 1825
+    grain: one row per unit per version of its text
+    primary_key: [unit_id]
+    write_mode: merge
     columns:
-      - {name: doc_id,            type: string,    nullable: false, description: FK to bronze.raw_documents}
-      - {name: page_no,           type: int,       nullable: false, description: 1-based page number}
-      - {name: text,              type: string,    nullable: true,  description: Extracted text}
+      - {name: unit_id,           type: string,    nullable: false, description: "SHA-256 of source_id + unit_ref + text_hash. Same text, same id."}
+      - {name: source_id,         type: string,    nullable: false, description: Key into config/sources.yaml. Stable across versions of the law.}
+      - {name: doc_id,            type: string,    nullable: false, description: FK to bronze.raw_documents. The document version this text first appeared in.}
+      - {name: unit_type,         type: string,    nullable: false, description: section | page}
+      - {name: unit_ref,          type: string,    nullable: false, description: "Citation-ready reference, unique within a source. e.g. s. 12, Sch. 2, s. 1, p. 7"}
+      - {name: unit_order,        type: int,       nullable: false, description: Position in the document, from the file order (section numbers can be ranges like 30-31)}
+      - {name: context_path,      type: string,    nullable: true,  description: "Where the unit sits, e.g. Part 4 Care and Supervision > Division 2 Staffing"}
+      - {name: heading,           type: string,    nullable: true,  description: Section heading (marginal note). Null for schedule sections and pages.}
+      - {name: text,              type: string,    nullable: true,  description: Clean text with subsection numbers inline. Repealed subsections removed. Tables rendered row by row.}
       - {name: char_count,        type: int,       nullable: false, description: Length of text}
-      - {name: extraction_method, type: string,    nullable: false, description: pypdf | html}
-      - {name: load_id,           type: string,    nullable: false, description: run_id that produced the row}
+      - {name: token_estimate,    type: int,       nullable: false, description: "char_count / settings chunking.chars_per_token. An estimate, not a model count (ADR-009)."}
+      - {name: text_hash,         type: string,    nullable: false, description: SHA-256 of text. How a changed section is detected between versions.}
+      - {name: history_note,      type: string,    nullable: true,  description: Enactment and amendment notes from the source, including notes of repealed subsections}
+      - {name: is_repealed,       type: boolean,   nullable: false, description: True when the whole unit is repealed. Kept for the record, never chunked.}
+      - {name: extraction_method, type: string,    nullable: false, description: xml | pypdf}
+      - {name: valid_from,        type: timestamp, nullable: false, description: UTC time this version of the text became current in the platform}
+      - {name: valid_to,          type: timestamp, nullable: true,  description: UTC time it was replaced. Null while current.}
+      - {name: is_current,        type: boolean,   nullable: false, description: True for the version in force now. One per source_id + unit_ref.}
+      - {name: load_id,           type: string,    nullable: false, description: run_id that wrote this version}
 
   - name: silver.chunks
     layer: silver
     domain: regulations
-    description: Cleaned text chunks with section references. The unit everything downstream works on.
+    description: Retrieval chunks built from current, non-repealed units. Usually one per section; long sections are split at subsection boundaries. The unit everything downstream works on.
     classification: Public
     retention_days: 365
     grain: one row per chunk
     primary_key: [chunk_id]
-    write_mode: overwrite_partition
+    write_mode: overwrite
     columns:
-      - {name: chunk_id,     type: string,    nullable: false, description: "doc_id + chunk_index hash"}
-      - {name: doc_id,       type: string,    nullable: false, description: FK to bronze.raw_documents}
-      - {name: chunk_index,  type: int,       nullable: false, description: Order within the document}
-      - {name: page_start,   type: int,       nullable: false, description: First page the chunk covers}
-      - {name: page_end,     type: int,       nullable: false, description: Last page the chunk covers}
-      - {name: section_ref,  type: string,    nullable: true,  description: "Section number if detected, e.g. s. 27(1)"}
-      - {name: text,         type: string,    nullable: false, description: Chunk text}
-      - {name: token_count,  type: int,       nullable: false, description: Tokens by tiktoken cl100k_base}
-      - {name: text_hash,    type: string,    nullable: false, description: SHA-256 of normalized text, for duplicate checks}
-      - {name: pii_flag,     type: boolean,   nullable: false, description: True if PII scan found something. Excluded from gold.}
-      - {name: load_id,      type: string,    nullable: false, description: run_id that produced the row}
+      - {name: chunk_id,       type: string,  nullable: false, description: "SHA-256 of unit_id + chunk_index. Stable while the unit's text is unchanged, so gold is not rebuilt for nothing."}
+      - {name: unit_id,        type: string,  nullable: false, description: FK to silver.document_units}
+      - {name: doc_id,         type: string,  nullable: false, description: FK to bronze.raw_documents}
+      - {name: source_id,      type: string,  nullable: false, description: Key into config/sources.yaml}
+      - {name: unit_ref,       type: string,  nullable: false, description: "Citation shown with answers, e.g. s. 43"}
+      - {name: chunk_index,    type: int,     nullable: false, description: 0 for a whole unit; 0, 1, 2 when a long unit is split}
+      - {name: context_header, type: string,  nullable: false, description: "Label put in front of the text, e.g. [BC | Residential Care Regulation | Part 4 > Division 2 | s. 43 Fire drills]"}
+      - {name: text,           type: string,  nullable: false, description: context_header + chunk text. This is what gets embedded and sent to the LLM.}
+      - {name: token_estimate, type: int,     nullable: false, description: Estimated tokens of text (header included)}
+      - {name: text_hash,      type: string,  nullable: false, description: SHA-256 of normalized text, for duplicate checks}
+      - {name: pii_flag,       type: boolean, nullable: false, description: True if PII scan found something. Excluded from gold.}
+      - {name: load_id,        type: string,  nullable: false, description: run_id that produced the row}
+
+  - name: silver.cross_references
+    layer: silver
+    domain: regulations
+    description: Links from a unit to another law, read from the source markup (no LLM). Feeds REFERENCES edges in the knowledge graph.
+    classification: Public
+    retention_days: 1825
+    grain: one row per link per unit version
+    primary_key: [ref_id]
+    write_mode: merge
+    columns:
+      - {name: ref_id,        type: string, nullable: false, description: "SHA-256 of unit_id + position of the link in the unit"}
+      - {name: unit_id,       type: string, nullable: false, description: FK to silver.document_units (the unit containing the link)}
+      - {name: source_id,     type: string, nullable: false, description: Law the link is in}
+      - {name: unit_ref,      type: string, nullable: false, description: Unit the link is in}
+      - {name: target_href,   type: string, nullable: false, description: "Link target as published, e.g. /legislation/96405_01"}
+      - {name: target_doc_id, type: string, nullable: true,  description: "BC document id parsed from the href, e.g. 96405_01. Null if the link is not to legislation."}
+      - {name: target_text,   type: string, nullable: false, description: "Link text, e.g. Representation Agreement Act"}
+      - {name: load_id,       type: string, nullable: false, description: run_id that produced the row}
 
   # ---------------- GOLD ----------------
   - name: gold.chunk_embeddings

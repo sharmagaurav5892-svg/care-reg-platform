@@ -80,15 +80,14 @@ rules:
     values: [bclaws, github]
     description: Every row must come from a known connector.
 
-  # ---------------- SILVER ----------------
   - id: DQ-S-001
-    table: silver.document_pages
+    table: silver.document_units
     dimension: completeness
-    severity: warning
+    severity: critical
     check: ratio_min
-    expression: char_count > 0
-    threshold: 0.95
-    description: At least 95 percent of pages should yield text. Lower usually means scanned PDFs that need OCR.
+    expression: is_repealed OR char_count > 0
+    threshold: 1.0
+    description: Every unit that is still law must have text. An empty one means the parser missed the markup, and that law would silently vanish from answers.
 
   - id: DQ-S-002
     table: silver.chunks
@@ -103,9 +102,9 @@ rules:
     dimension: validity
     severity: warning
     check: ratio_min
-    expression: token_count BETWEEN 50 AND 1200
+    expression: token_estimate BETWEEN 20 AND 1200
     threshold: 0.98
-    description: Chunks should fall in the target size band. Outliers hurt retrieval.
+    description: Chunks should fall in the size band. Lower bound is 20, not 50, because short sections are valid law (25 of 279 BC sections are under 50 tokens, profiled 2026-09-26); the context header alone is about 20, so below that means a parsing fault.
 
   - id: DQ-S-004
     table: silver.chunks
@@ -133,6 +132,31 @@ rules:
     expression: pii_flag = true
     threshold: 0.01
     description: PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold.
+
+  - id: DQ-S-007
+    table: silver.document_units
+    dimension: uniqueness
+    severity: critical
+    check: custom
+    column: is_current
+    description: Exactly one current version per source_id + unit_ref. Two current versions means answers could quote amended law.
+
+  - id: DQ-S-008
+    table: silver.chunks
+    dimension: consistency
+    severity: critical
+    check: custom
+    column: unit_id
+    description: Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law.
+
+  - id: DQ-S-009
+    table: silver.cross_references
+    dimension: consistency
+    severity: critical
+    check: foreign_key
+    column: unit_id
+    references: silver.document_units.unit_id
+    description: Every cross reference must belong to a unit we hold.
 
   # ---------------- GOLD ----------------
   - id: DQ-G-001

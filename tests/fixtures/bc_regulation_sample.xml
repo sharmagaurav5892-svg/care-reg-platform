@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Made-up regulation shaped like BC Laws XML (tags and nesting as profiled 2026-09-26). Not real law. -->
+<bcl:regulation xmlns:bcl="http://www.gov.bc.ca/2013/bclegislation" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <bcl:title>Sample Care Regulation</bcl:title>
+  <bcl:content>
+    <bcl:part id="p1">
+      <bcl:num>1</bcl:num>
+      <bcl:text>Interpretation</bcl:text>
+      <bcl:section id="s1">
+        <bcl:marginalnote>Definitions</bcl:marginalnote>
+        <bcl:num>1</bcl:num>
+        <bcl:text>In this regulation:</bcl:text>
+        <bcl:definition><bcl:text>"<bcl:term>care facility</bcl:term>" means a community care facility licensed under the <bcl:link resource="leg" xlink:href="/legislation/02075_01" xlink:type="locator"><bcl:doc>Community Care and Assisted Living Act</bcl:doc></bcl:link>;</bcl:text></bcl:definition>
+        <bcl:definition><bcl:text>"<bcl:term>person in care</bcl:term>" means an adult who lives in a care facility.</bcl:text></bcl:definition>
+      </bcl:section>
+    </bcl:part>
+    <bcl:part id="p2">
+      <bcl:num>2</bcl:num>
+      <bcl:text>Care and Supervision</bcl:text>
+      <bcl:division id="d1">
+        <bcl:num>1</bcl:num>
+        <bcl:text>Safety</bcl:text>
+        <bcl:section id="s12">
+          <bcl:marginalnote>Investigation or inspection</bcl:marginalnote>
+          <bcl:num>12</bcl:num>
+          <bcl:subsection id="s12-1">
+            <bcl:num>1</bcl:num>
+            <bcl:text>Repealed. [B.C. Reg. 189/2019, App. 3, s. 2.]</bcl:text>
+          </bcl:subsection>
+          <bcl:subsection id="s12-2">
+            <bcl:num>2</bcl:num>
+            <bcl:text>A licensee must cooperate with an inspection, including by</bcl:text>
+            <bcl:paragraph id="s12-2-a">
+              <bcl:num>a</bcl:num>
+              <bcl:text>giving access to the premises, and</bcl:text>
+            </bcl:paragraph>
+            <bcl:paragraph id="s12-2-b">
+              <bcl:num>b</bcl:num>
+              <bcl:text>producing records on request.</bcl:text>
+            </bcl:paragraph>
+          </bcl:subsection>
+        </bcl:section>
+        <bcl:section id="s13">
+          <bcl:marginalnote>Fire drills</bcl:marginalnote>
+          <bcl:num>13</bcl:num>
+          <bcl:text>A licensee must hold a fire drill at least once a month.</bcl:text>
+          <bcl:hnote>[en. B.C. Reg. 192/2022, Sch. 4, s. 2.]</bcl:hnote>
+        </bcl:section>
+        <bcl:section id="s14">
+          <bcl:marginalnote>Bathing facilities</bcl:marginalnote>
+          <bcl:num>14</bcl:num>
+          <bcl:text>A licensee must provide bathing facilities as set out in the following table:</bcl:text>
+          <bcl:table><bcl:tgroup>
+            <bcl:thead><bcl:trow><bcl:entry><bcl:line>Item</bcl:line></bcl:entry><bcl:entry><bcl:line>Persons in care</bcl:line></bcl:entry><bcl:entry><bcl:line>Bathing facilities</bcl:line></bcl:entry></bcl:trow></bcl:thead>
+            <bcl:tbody>
+              <bcl:trow><bcl:entry><bcl:line>1</bcl:line></bcl:entry><bcl:entry><bcl:line>1 to 10</bcl:line></bcl:entry><bcl:entry><bcl:line>1</bcl:line></bcl:entry></bcl:trow>
+              <bcl:trow><bcl:entry><bcl:line>2</bcl:line></bcl:entry><bcl:entry><bcl:line>11 to 20</bcl:line></bcl:entry><bcl:entry><bcl:line>2</bcl:line></bcl:entry></bcl:trow>
+            </bcl:tbody>
+          </bcl:tgroup></bcl:table>
+        </bcl:section>
+        <bcl:section id="s30">
+          <bcl:marginalnote>Repealed</bcl:marginalnote>
+          <bcl:num>30-31</bcl:num>
+          <bcl:text>[Repealed 2004-45-80.]</bcl:text>
+        </bcl:section>
+      </bcl:division>
+    </bcl:part>
+    <bcl:schedule id="sch1">
+      <bcl:scheduletitle>Schedule A</bcl:scheduletitle>
+      <bcl:section id="sch1-1">
+        <bcl:num>1</bcl:num>
+        <bcl:text>An applicant for a licence must submit the matters set out in this Schedule.</bcl:text>
+      </bcl:section>
+    </bcl:schedule>
+    <bcl:conseqhead>
+      <bcl:table><bcl:tgroup><bcl:tbody>
+        <bcl:trow><bcl:entry><bcl:line>Section(s)</bcl:line></bcl:entry><bcl:entry><bcl:line>Affected Act</bcl:line></bcl:entry></bcl:trow>
+      </bcl:tbody></bcl:tgroup></bcl:table>
+    </bcl:conseqhead>
+  </bcl:content>
+</bcl:regulation>

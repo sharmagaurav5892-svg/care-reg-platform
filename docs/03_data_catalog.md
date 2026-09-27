@@ -20,7 +20,7 @@
 | [silver.document_units](#silverdocument_units) | silver | regulations | Public | 1825 | one row per unit per version of its text | 2 |
 | [silver.chunks](#silverchunks) | silver | regulations | Public | 365 | one row per chunk (active or retired) | 7 |
 | [silver.cross_references](#silvercross_references) | silver | regulations | Public | 1825 | one row per link per unit version | 1 |
-| [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model | 2 |
+| [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model (active or retired) | 3 |
 | [gold.entities](#goldentities) | gold | regulations | Public | 365 | one row per entity mention per chunk | 1 |
 | [gold.relationships](#goldrelationships) | gold | regulations | Public | 365 | one row per relationship mention per chunk | 2 |
 | [gold.llm_call_log](#goldllm_call_log) | gold | ai_operations | Internal | 180 | one row per model call attempt | 1 |
@@ -188,30 +188,33 @@ Links from a unit to another law, read from the source markup (no LLM). Feeds RE
 
 ## gold.chunk_embeddings
 
-Vector embedding per chunk.
+One vector per active, non-PII chunk per embedding model. Follows the chunk lifecycle, so amended or repealed law can't be found through the vector index. Only new chunks are embedded (ADR-010).
 
 - **Owner:** Regulations Data Owner  
 - **Steward:** Regulations Data Steward  
 - **Classification:** Public  
 - **Retention:** 365 days  
-- **Grain:** one row per chunk per embedding model  
+- **Grain:** one row per chunk per embedding model (active or retired)  
 - **Primary key:** chunk_id, embedding_model  
 - **Write mode:** merge
 
 | Column | Type | Nullable | Description |
 |--------|------|:--------:|-------------|
 | chunk_id | string | no | FK to silver.chunks |
-| embedding_model | string | no | Deployment name and version |
-| embedding_dim | int | no | Vector length |
+| embedding_model | string | no | Model endpoint that produced the vector, e.g. databricks-gte-large-en. Vectors from different models are never compared. |
+| embedding_dim | int | no | Vector length. Must equal models.embeddings.dim (DQ-G-002). |
 | vector | array<float> | no | The embedding |
-| load_id | string | no | run_id that produced the row |
+| is_active | boolean | no | True while its chunk is active. Search only uses active vectors. |
+| retired_at | timestamp | yes | UTC time its chunk was retired (amended |
+| load_id | string | no | run_id that created the vector |
 
 **Data quality rules**
 
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
-| DQ-G-001 | critical | completeness | Missing embeddings mean silently missing answers. |
-| DQ-G-002 | critical | validity | Vector length must match the configured embedding model. |
+| DQ-G-001 | critical | completeness | Every active, non-PII chunk must have an active embedding. A missing one is law the search can never find, with no error anywhere. |
+| DQ-G-002 | critical | validity | Vector length must match the configured embedding model. A different length means vectors from two models got mixed. |
+| DQ-G-010 | critical | consistency | No active embedding may belong to a chunk that is retired or flagged for PII. Otherwise search could return amended, repealed or personal text. |
 
 ## gold.entities
 

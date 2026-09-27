@@ -125,18 +125,20 @@ tables:
   - name: gold.chunk_embeddings
     layer: gold
     domain: regulations
-    description: Vector embedding per chunk.
+    description: One vector per active, non-PII chunk per embedding model. Follows the chunk lifecycle, so amended or repealed law can't be found through the vector index. Only new chunks are embedded (ADR-010).
     classification: Public
     retention_days: 365
-    grain: one row per chunk per embedding model
+    grain: one row per chunk per embedding model (active or retired)
     primary_key: [chunk_id, embedding_model]
     write_mode: merge
     columns:
-      - {name: chunk_id,        type: string,        nullable: false, description: FK to silver.chunks}
-      - {name: embedding_model, type: string,        nullable: false, description: Deployment name and version}
-      - {name: embedding_dim,   type: int,           nullable: false, description: Vector length}
-      - {name: vector,          type: array<float>,  nullable: false, description: The embedding}
-      - {name: load_id,         type: string,        nullable: false, description: run_id that produced the row}
+      - {name: chunk_id,        type: string,       nullable: false, description: FK to silver.chunks}
+      - {name: embedding_model, type: string,       nullable: false, description: "Model endpoint that produced the vector, e.g. databricks-gte-large-en. Vectors from different models are never compared."}
+      - {name: embedding_dim,   type: int,          nullable: false, description: Vector length. Must equal models.embeddings.dim (DQ-G-002).}
+      - {name: vector,          type: array<float>, nullable: false, description: The embedding}
+      - {name: is_active,       type: boolean,      nullable: false, description: True while its chunk is active. Search only uses active vectors.}
+      - {name: retired_at,      type: timestamp,    nullable: true,  description: UTC time its chunk was retired (amended, repealed, rebuilt) or flagged for PII}
+      - {name: load_id,         type: string,       nullable: false, description: run_id that created the vector}
 
   - name: gold.entities
     layer: gold

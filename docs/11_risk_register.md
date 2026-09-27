@@ -22,5 +22,6 @@ Likelihood and impact on a 1 (low) to 3 (high) scale. Score = likelihood x impac
 | R-16 | Databricks deploy token leaked or expires unnoticed | 1 | 2 | 2 | GitHub secret only, 90 day lifetime, EX-002 expiry, deploy fails loudly on 401 | Platform Owner | Open |
 | R-17 | Free Edition quota shuts compute for the day | 2 | 1 | 2 | One small daily job, `max_concurrent_runs: 1`, laptop mode still works | Data Engineer | Open |
 | R-18 | Change reaches prod without review | 1 | 3 | 3 | Prod only from tags, GitHub `prod` environment requires approval, branch protection on main | Platform Owner | Open |
-
+| R-20 | Shared model endpoint rate limit (HTTP 429) slows or fails the embedding step | 2 | 1 | 2 | Batches of 8, pause between calls, 429 retried with backoff, every attempt in ops.api_call_log; provisioned throughput is the paid fix | Data Engineer | Open |
+| R-21 | Embedding model changed or retired by the platform, old and new vectors mixed | 1 | 3 | 3 | Model name on every vector, DQ-G-002 checks length, change = re-embed everything in one PR (ADR-010) | AI Model Owner | Open |
 Reviewed at every release.

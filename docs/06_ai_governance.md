@@ -8,7 +8,7 @@ Nothing goes into use without a row here.
 
 | ID | Component | Model / version | Purpose | Owner | Eval gate | Status |
 |----|-----------|-----------------|---------|-------|-----------|--------|
-| M-01 | Embeddings | Azure OpenAI `text-embedding-3-small` | Chunk and query vectors | AI Model Owner | Retrieval recall at 5 of at least 0.80 on gold set | Planned |
+| M-01 | Embeddings | Databricks-hosted `databricks-gte-large-en` (1024 dims), ADR-010 | Chunk and query vectors | AI Model Owner | Retrieval recall at 5 of at least 0.80 on gold set | In use (dev) |
 | M-02 | Entity extraction | Azure OpenAI `gpt-4.1-mini`, prompt `extract-v1` | Build graph from chunks | AI Model Owner | Schema validity 100 percent (DQ-G-003, DQ-G-005), spot check precision of at least 0.85 on 50 chunks | Planned |
 | M-03 | Answer generation | Azure OpenAI `gpt-4.1-mini`, prompt `answer-v1` | Answer user questions with citations | AI Model Owner | Judge score average of at least 4.0 and citation rate 100 percent | Planned |
 | M-04 | Judge | Azure OpenAI `gpt-4.1-mini`, prompt `judge-v1` | Score answers | Evaluator | Agreement with human labels of at least 0.75 (within 1 point) | Planned |

@@ -45,9 +45,14 @@ chunking:
   chunker_version: "1"
 
 models:
-  chat_deployment: gpt-4.1-mini
-  embedding_deployment: text-embedding-3-small
-  embedding_dim: 1536
+  # Embeddings: Databricks-hosted model (ADR-010). No API key, text never leaves the platform.
+  # Chat models (Gemini primary, Databricks-hosted fallback) are added with the LLM gateway.
+  embeddings:
+    provider: databricks
+    endpoint: databricks-gte-large-en
+    dim: 1024
+    batch_size: 8                      # 16 got HTTP 429 "workspace QPS rate limit" (tested 2026-09-27)
+    min_seconds_between_calls: 1.0     # pace ourselves; 429s still retried with backoff
 
 graph:
   entity_types: [Regulation, Section, Requirement, HomeType, CareService, Role, Penalty, Authority]
@@ -59,7 +64,7 @@ cost_guardrails:
   max_cost_per_run_usd: 3
   alert_at_percent: [50, 80, 100]
 
-# USD per 1M tokens. Update from the Azure pricing page before each release.
-pricing:
-  gpt-4.1-mini:            {input: 0.40, output: 1.60}
-  text-embedding-3-small:  {input: 0.02, output: 0.0}
+# USD per 1M tokens, checked on the provider's pricing page before each release.
+# Databricks-hosted models cost nothing on Free Edition; list prices are added with the
+# LLM gateway so the cost dashboard can show what a paid workspace would pay.
+pricing: {}

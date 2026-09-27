@@ -82,20 +82,36 @@ class ApiClient:
     def get(self, path: str, params: dict | None = None, accept: str | None = None,
             headers: dict | None = None) -> requests.Response:
         """GET with retries. A 304 Not Modified counts as success (resp.ok is True for 3xx)."""
-        url = path if path.startswith("http") else f"{self.base_url}{path}"
-        headers = {**self.headers, **(headers or {})}
+        headers = dict(headers or {})
         if accept:
             headers["Accept"] = accept
+        return self._send("GET", path, headers=headers, params=params)
+
+    def post(self, path: str, json: dict, headers: dict | None = None) -> requests.Response:
+        """POST a JSON body with the same retries, rate-limit handling and audit log as GET.
+
+        Used for model endpoints (embeddings now, LLM calls later). Only retried on the
+        same transient statuses as GET (429, 5xx, connection errors): model calls here are
+        stateless, so repeating one is safe.
+        """
+        return self._send("POST", path, headers=headers, json=json)
+
+    def _send(self, method: str, path: str, headers: dict | None = None,
+              params: dict | None = None, json: dict | None = None) -> requests.Response:
+        url = path if path.startswith("http") else f"{self.base_url}{path}"
+        headers = {**self.headers, **(headers or {})}
+        call = getattr(self.session, method.lower())
+        extra = {"json": json} if json is not None else {}
 
         for attempt in range(1, self.max_retries + 2):
             started = time.perf_counter()
             resp, error = None, None
             try:
-                resp = self.session.get(url, headers=headers, params=params, timeout=self.timeout)
+                resp = call(url, headers=headers, params=params, timeout=self.timeout, **extra)
             except (requests.ConnectionError, requests.Timeout) as e:
                 error = e
             latency = int((time.perf_counter() - started) * 1000)
-            self._record(url, attempt, latency, resp, error)
+            self._record(url, attempt, latency, resp, error, method)
 
             if resp is not None and resp.ok:
                 return resp
@@ -104,9 +120,9 @@ class ApiClient:
             wait = self._wait_seconds(resp, attempt)
             if wait is None or is_last:
                 if resp is None:
-                    raise ApiError(f"GET {url} failed after {attempt} attempts: {error}")
+                    raise ApiError(f"{method} {url} failed after {attempt} attempts: {error}")
                 raise ApiError(
-                    f"GET {url} returned {resp.status_code}: {resp.text[:300]}",
+                    f"{method} {url} returned {resp.status_code}: {resp.text[:300]}",
                     status_code=resp.status_code,
                 )
             self._sleep(wait)
@@ -156,14 +172,14 @@ class ApiClient:
 
     # ---------- audit ----------
 
-    def _record(self, url, attempt, latency_ms, resp, error) -> None:
+    def _record(self, url, attempt, latency_ms, resp, error, method: str = "GET") -> None:
         endpoint = url.replace(self.base_url, "").split("?")[0]
         remaining = resp.headers.get("X-RateLimit-Remaining") if resp is not None else None
         self.calls.append({
             "call_id": str(uuid.uuid4()),
             "run_id": self.run_id,
             "connector": self.connector,
-            "method": "GET",
+            "method": method,
             "endpoint": endpoint,
             "status_code": resp.status_code if resp is not None else None,
             "attempt": attempt,

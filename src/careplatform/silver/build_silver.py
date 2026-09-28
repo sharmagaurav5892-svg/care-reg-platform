@@ -87,6 +87,7 @@ def units_for_document(doc: pd.Series, xml_bytes: bytes, now, load_id: str) -> t
             "text_hash": text_hash,
             "history_note": u.history_note,
             "is_repealed": u.is_repealed,
+            "in_force": u.in_force,
             "extraction_method": "xml",
             "valid_from": now,
             "valid_to": None,
@@ -176,7 +177,8 @@ def build_chunks(units: pd.DataFrame, load_id: str) -> pd.DataFrame:
     cpt = cfg["chars_per_token"]
     version = chunker_version()
     titles = {s["source_id"]: s for s in config.sources()["sources"]}
-    live = units[units["is_current"].astype(bool) & ~units["is_repealed"].astype(bool)].sort_values(["source_id", "unit_order"])
+    live = units[units["is_current"].astype(bool) & ~units["is_repealed"].astype(bool)
+                 & units["in_force"].astype(bool)].sort_values(["source_id", "unit_order"])
     rows = []
     for u in live.to_dict("records"):
         text = _s(u["text"])

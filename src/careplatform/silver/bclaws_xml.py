@@ -18,6 +18,10 @@ The shape it handles comes from profiling the real files (ADR-009):
         schedule                     -> sections inside get "Sch. 2, s. 1" (numbering restarts)
         conseqhead                   -> consequential amendments bookkeeping: skipped
 
+"Not in force" (enacted but never brought into effect, e.g. CCALA s. 12) is handled
+the same way as repeal: a whole section gets in_force = False and is never chunked;
+a single subsection marked "[Not in force.]" is dropped from the text with a note.
+
 Repeal is handled at two levels (the profile showed both):
   * whole section: heading is "Repealed"  -> is_repealed = True, kept, never chunked
   * one subsection or lower: its text starts "Repealed" -> that piece is dropped from
@@ -33,6 +37,7 @@ NUMBERED = {"subsection", "paragraph", "subparagraph", "clause", "subclause"}
 CONTAINERS = {"part", "division"}
 SKIP = {"conseqhead"}                      # consequential amendments table, not rules
 REPEALED = re.compile(r"^\[?\s*repealed\b", re.IGNORECASE)
+NOT_IN_FORCE = re.compile(r"^\[?\s*not in force\b", re.IGNORECASE)   # enacted but never brought into effect
 LEG_HREF = re.compile(r"/legislation/([^/?#]+)")
 
 
@@ -66,6 +71,7 @@ class Unit:
     text: str
     history_note: str | None
     is_repealed: bool
+    in_force: bool
     links: list[tuple[str, str]] = field(default_factory=list)    # (href, link text)
 
 
@@ -90,7 +96,7 @@ def _render(el: ET.Element, notes: list[str]) -> list[str]:
     tag = local(el)
     num = child_text(el, "num")
     own_text = child_text(el, "text")
-    if tag in NUMBERED and REPEALED.match(own_text):
+    if tag in NUMBERED and (REPEALED.match(own_text) or NOT_IN_FORCE.match(own_text)):
         notes.append(f"({num}) {own_text}" if num else own_text)
         return []
 
@@ -171,6 +177,7 @@ def _section(sec: ET.Element, path: list[str], sched: str | None, order: int) ->
     text = "\n".join(lines)
     whole_repeal = (heading or "").strip().lower() == "repealed" or (not lines and bool(notes)) \
         or bool(REPEALED.match(text))
+    in_force = (heading or "").strip().lower() != "not in force" and not NOT_IN_FORCE.match(text)
     links = []
     for a in sec.iter():
         if local(a) == "link":
@@ -185,6 +192,7 @@ def _section(sec: ET.Element, path: list[str], sched: str | None, order: int) ->
         text=text,
         history_note="; ".join(n for n in notes if n) or None,
         is_repealed=whole_repeal,
+        in_force=in_force,
         links=links,
     )
 

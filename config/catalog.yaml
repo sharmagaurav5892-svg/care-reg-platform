@@ -68,6 +68,7 @@ tables:
       - {name: text_hash,         type: string,    nullable: false, description: SHA-256 of text. How a changed section is detected between versions.}
       - {name: history_note,      type: string,    nullable: true,  description: Enactment and amendment notes from the source, including notes of repealed subsections}
       - {name: is_repealed,       type: boolean,   nullable: false, description: True when the whole unit is repealed. Kept for the record, never chunked.}
+      - {name: in_force,          type: boolean,   nullable: false, description: "False when the unit is marked Not in force (enacted but not in effect). Kept for the record, never chunked."}
       - {name: extraction_method, type: string,    nullable: false, description: xml | pypdf}
       - {name: valid_from,        type: timestamp, nullable: false, description: "UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009)."}
       - {name: valid_to,          type: timestamp, nullable: true,  description: UTC time it was replaced. Null while current.}

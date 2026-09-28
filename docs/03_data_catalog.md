@@ -102,6 +102,7 @@ One row per version of a section (XML) or page (PDF). History is kept (SCD2), so
 | text_hash | string | no | SHA-256 of text. How a changed section is detected between versions. |
 | history_note | string | yes | Enactment and amendment notes from the source |
 | is_repealed | boolean | no | True when the whole unit is repealed. Kept for the record |
+| in_force | boolean | no | False when the unit is marked Not in force (enacted but not in effect). Kept for the record, never chunked. |
 | extraction_method | string | no | xml | pypdf |
 | valid_from | timestamp | no | UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009). |
 | valid_to | timestamp | yes | UTC time it was replaced. Null while current. |
@@ -154,7 +155,7 @@ Retrieval chunks built from current, non-repealed units. Usually one per section
 | DQ-S-004 | critical | consistency | Every chunk must trace back to a registered file. |
 | DQ-S-005 | warning | uniqueness | Duplicate chunk text above 5 percent points to repeated headers or a chunking bug. |
 | DQ-S-006 | warning | validity | PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold. |
-| DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law. |
+| DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current, not repealed and in force. This is the rule that stops the app quoting old, cancelled or not-yet-effective law. |
 | DQ-S-010 | critical | consistency | Every active chunk must be built by the current chunking logic. A mix means a rebuild stopped halfway and search would return two styles of the same law. |
 
 ## silver.cross_references

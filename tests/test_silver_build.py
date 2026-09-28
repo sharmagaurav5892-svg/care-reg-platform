@@ -37,6 +37,8 @@ def test_first_build(bc):
     assert units["is_current"].all()
     rep = units[units["unit_ref"] == "s. 30-31"].iloc[0]
     assert rep["is_repealed"] and rep["unit_id"] not in set(chunks["unit_id"])     # never chunked
+    nif = units[units["unit_ref"] == "s. 15"].iloc[0]
+    assert not nif["in_force"] and nif["unit_id"] not in set(chunks["unit_id"])     # not in force: never chunked
 
     c13 = chunks[chunks["unit_ref"] == "s. 13"].iloc[0]
     assert c13["text"].startswith("[BC | Residential Care Regulation")

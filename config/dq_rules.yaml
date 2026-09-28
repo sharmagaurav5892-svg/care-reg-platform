@@ -150,7 +150,7 @@ rules:
     severity: critical
     check: custom
     column: unit_id
-    description: Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law.
+    description: Every chunk must come from a unit that is current, not repealed and in force. This is the rule that stops the app quoting old, cancelled or not-yet-effective law.
 
   - id: DQ-S-009
     table: silver.cross_references

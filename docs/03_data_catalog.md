@@ -102,6 +102,7 @@ One row per version of a section (XML) or page (PDF). History is kept (SCD2), so
 | text_hash | string | no | SHA-256 of text. How a changed section is detected between versions. |
 | history_note | string | yes | Enactment and amendment notes from the source |
 | is_repealed | boolean | no | True when the whole unit is repealed. Kept for the record |
+| in_force | boolean | no | False when the unit is marked Not in force (enacted but not in effect). Kept for the record, never chunked. |
 | extraction_method | string | no | xml | pypdf |
 | valid_from | timestamp | no | UTC time the platform first saw this text. System time, NOT the legal effective date (ADR-009). |
 | valid_to | timestamp | yes | UTC time it was replaced. Null while current. |

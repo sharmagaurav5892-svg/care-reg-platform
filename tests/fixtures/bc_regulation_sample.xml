@@ -58,6 +58,23 @@
             </bcl:tbody>
           </bcl:tgroup></bcl:table>
         </bcl:section>
+        <bcl:section id="s15">
+          <bcl:marginalnote>Not in force</bcl:marginalnote>
+          <bcl:num>15</bcl:num>
+          <bcl:text>[Not in force.]</bcl:text>
+        </bcl:section>
+        <bcl:section id="s16">
+          <bcl:marginalnote>Immunity</bcl:marginalnote>
+          <bcl:num>16</bcl:num>
+          <bcl:subsection id="s16-1">
+            <bcl:num>1</bcl:num>
+            <bcl:text>No legal proceeding lies against an inspector acting in good faith.</bcl:text>
+          </bcl:subsection>
+          <bcl:subsection id="s16-2">
+            <bcl:num>2</bcl:num>
+            <bcl:text>[Not in force.]</bcl:text>
+          </bcl:subsection>
+        </bcl:section>
         <bcl:section id="s30">
           <bcl:marginalnote>Repealed</bcl:marginalnote>
           <bcl:num>30-31</bcl:num>

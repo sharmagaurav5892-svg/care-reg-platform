@@ -155,7 +155,7 @@ Retrieval chunks built from current, non-repealed units. Usually one per section
 | DQ-S-004 | critical | consistency | Every chunk must trace back to a registered file. |
 | DQ-S-005 | warning | uniqueness | Duplicate chunk text above 5 percent points to repeated headers or a chunking bug. |
 | DQ-S-006 | warning | validity | PII flags above 1 percent of chunks need Data Steward review. Flagged chunks never reach gold. |
-| DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current and not repealed. This is the rule that stops the app quoting old or cancelled law. |
+| DQ-S-008 | critical | consistency | Every chunk must come from a unit that is current, not repealed and in force. This is the rule that stops the app quoting old, cancelled or not-yet-effective law. |
 | DQ-S-010 | critical | consistency | Every active chunk must be built by the current chunking logic. A mix means a rebuild stopped halfway and search would return two styles of the same law. |
 
 ## silver.cross_references

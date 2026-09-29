@@ -23,7 +23,7 @@
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model (active or retired) | 3 |
 | [gold.entities](#goldentities) | gold | regulations | Public | 365 | one row per entity mention per chunk | 1 |
 | [gold.relationships](#goldrelationships) | gold | regulations | Public | 365 | one row per relationship mention per chunk | 2 |
-| [gold.llm_call_log](#goldllm_call_log) | gold | ai_operations | Internal | 180 | one row per model attempt (a fallback adds a second row for the same request) | 1 |
+| [gold.llm_call_log](#goldllm_call_log) | gold | ai_operations | Internal | 180 | one row per model attempt (a fallback adds a second row for the same request) | 2 |
 | [gold.eval_questions](#goldeval_questions) | gold | evaluation | Internal | 1825 | one row per question per version | 1 |
 | [gold.eval_results](#goldeval_results) | gold | evaluation | Internal | 1825 | one row per question per eval run per pipeline variant | 2 |
 | [ops.run_log](#opsrun_log) | ops | platform | Internal | 1825 | one row per run | 1 |
@@ -312,6 +312,7 @@ One row per model attempt through the LLM gateway (ADR-011). Metrics only; never
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
 | DQ-G-006 | warning | validity | Negative cost means a pricing config error. |
+| DQ-G-011 | critical | validity | Every call must have gone to a model allowed for that data's classification, and restricted data to none. A breach means data left the platform against policy. |
 
 ## gold.eval_questions
 

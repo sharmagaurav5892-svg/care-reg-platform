@@ -25,3 +25,5 @@ Likelihood and impact on a 1 (low) to 3 (high) scale. Score = likelihood x impac
 | R-20 | Shared model endpoint rate limit (HTTP 429) slows or fails the embedding step | 2 | 1 | 2 | Batches of 8, pause between calls, 429 retried with backoff, every attempt in ops.api_call_log; provisioned throughput is the paid fix | Data Engineer | Open |
 | R-21 | Embedding model changed or retired by the platform, old and new vectors mixed | 1 | 3 | 3 | Model name on every vector, DQ-G-002 checks length, change = re-embed everything in one PR (ADR-010) | AI Model Owner | Open |
 Reviewed at every release.
+| R-22 | A user question (Confidential) is sent to an external model whose free tier may use prompts for training | 1 | 3 | 3 | `allowed_data` per model in settings.yaml checked before every call; Gemini is public-only; DQ-G-011 checks every logged call afterwards (ADR-011) | AI Model Owner | Open |
+| R-23 | Hosted chat model changed, retired or unavailable; answers change without anyone deciding it | 2 | 2 | 4 | Model name and prompt version on every call log row; fallback route; evals rerun before a model change is merged (ADR-011) | AI Model Owner | Open |

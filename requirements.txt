@@ -1,18 +1,9 @@
-# Step 1: governance checks
+# What the careplatform code needs to RUN, outside Databricks jobs:
+# the Databricks App installs exactly this file (ADR-013). Keep it short.
+# Jobs install the wheel instead (pyproject.toml); laptop and CI tools are in requirements-dev.txt.
 pyyaml>=6.0
-pytest>=8.0
 python-dotenv>=1.0
-
-# Added in later steps (left here so one install covers the whole build)
-deltalake>=0.18
-duckdb>=1.0
+requests>=2.31
 pandas>=2.2
 pyarrow>=15.0
-requests>=2.31
-databricks-sdk>=0.30     # model serving auth (gateway, embeddings); Databricks jobs already have it
-pypdf>=4.0
-beautifulsoup4>=4.12
-tiktoken>=0.7
-openai>=1.40
-neo4j>=5.20
-streamlit>=1.36
+databricks-sdk>=0.30     # model serving and warehouse auth; already in Databricks Apps and jobs

@@ -1,0 +1,16 @@
+# Laptop and CI: everything needed to build, test and run locally.
+# pip install -r requirements-dev.txt
+-r requirements.txt
+
+pytest>=8.0
+deltalake>=0.18          # local lakehouse mode
+duckdb>=1.0              # local DQ ratio checks and the show command
+streamlit>=1.36          # run the app locally (the Databricks App already has it)
+databricks-sql-connector>=3.0   # sql lakehouse mode (the Databricks App already has it)
+
+# Later steps (left here so one install covers the whole build)
+pypdf>=4.0
+beautifulsoup4>=4.12
+tiktoken>=0.7
+openai>=1.40
+neo4j>=5.20

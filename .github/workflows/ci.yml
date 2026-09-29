@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
       - name: Governance checks and tests
         run: pytest -q
       - name: Wheel builds

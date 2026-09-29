@@ -46,13 +46,39 @@ chunking:
 
 models:
   # Embeddings: Databricks-hosted model (ADR-010). No API key, text never leaves the platform.
-  # Chat models (Gemini primary, Databricks-hosted fallback) are added with the LLM gateway.
+  # Chat models (Databricks primary, Gemini fallback) are added with the LLM gateway.
   embeddings:
     provider: databricks
     endpoint: databricks-gte-large-en
     dim: 1024
     batch_size: 8                      # 16 got HTTP 429 "workspace QPS rate limit" (tested 2026-09-27)
     min_seconds_between_calls: 1.0     # pace ourselves; 429s still retried with backoff
+
+      # Chat models: every call goes through the LLM gateway (ADR-011).
+  # route = the order models are tried in; the next one is the fallback.
+  # allowed_data = which classifications (docs/02) a model may receive. Restricted: none.
+  chat:
+    route:
+      - databricks-meta-llama-3-3-70b-instruct
+      - databricks-gpt-oss-120b
+      - gemini-2.5-flash
+    models:
+      databricks-meta-llama-3-3-70b-instruct:
+        provider: databricks            # hosted in the workspace, no key, data stays on the platform
+        allowed_data: [public, internal, confidential]
+      databricks-gpt-oss-120b:
+        provider: databricks            # reasoning model: ~2-3x the tokens, so fallback only
+        allowed_data: [public, internal, confidential]
+      gemini-2.5-flash:
+        provider: gemini                # external API, key in secret scope care-reg / gemini-api-key
+        api_key_secret: GEMINI_API_KEY
+        allowed_data: [public]          # free tier may use prompts to improve Google's models:
+                                        # public text only (eval runs), never user questions
+    temperature: 0                      # same question, same answer: needed for evals and audit
+    max_tokens: 800
+    timeout_seconds: 60
+    max_retries: 1                      # one quick retry, then fall back (a user is waiting)
+    daily_token_budget: 200000          # over this, the gateway refuses to call
 
 graph:
   entity_types: [Regulation, Section, Requirement, HomeType, CareService, Role, Penalty, Authority]
@@ -64,7 +90,10 @@ cost_guardrails:
   max_cost_per_run_usd: 3
   alert_at_percent: [50, 80, 100]
 
-# USD per 1M tokens, checked on the provider's pricing page before each release.
-# Databricks-hosted models cost nothing on Free Edition; list prices are added with the
-# LLM gateway so the cost dashboard can show what a paid workspace would pay.
-pricing: {}
+# USD per 1M tokens, used for gold.llm_call_log.cost_usd.
+# 0 = what we pay today (Databricks Free Edition, Gemini free tier). Before a paid rollout,
+# fill in the list prices from each provider's pricing page, in a reviewed PR.
+pricing:
+  databricks-meta-llama-3-3-70b-instruct: {input_per_1m: 0.0, output_per_1m: 0.0}
+  databricks-gpt-oss-120b: {input_per_1m: 0.0, output_per_1m: 0.0}
+  gemini-2.5-flash: {input_per_1m: 0.0, output_per_1m: 0.0}

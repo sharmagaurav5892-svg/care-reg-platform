@@ -10,7 +10,7 @@ Nothing goes into use without a row here.
 |----|-----------|-----------------|---------|-------|-----------|--------|
 | M-01 | Embeddings | Databricks-hosted `databricks-gte-large-en` (1024 dims), ADR-010 | Chunk and query vectors | AI Model Owner | Retrieval recall at 5 of at least 0.80 on gold set | In use (dev) |
 | M-02 | Entity extraction | Via the LLM gateway (ADR-011), prompt `extract-v1` | Build graph from chunks | AI Model Owner | Schema validity 100 percent (DQ-G-003, DQ-G-005), spot check precision of at least 0.85 on 50 chunks | Planned |
-| M-03 | Answer generation | Gateway route: Databricks-hosted `databricks-meta-llama-3-3-70b-instruct`, fallback `databricks-gpt-oss-120b`, prompt `answer-v1` | Answer user questions with citations | AI Model Owner | Judge score average of at least 4.0 and citation rate 100 percent | Building |
+| M-03 | Answer generation | Gateway route: Databricks-hosted `databricks-meta-llama-3-3-70b-instruct`, fallback `databricks-gpt-oss-120b`, prompt `answer-v1` | Answer user questions with citations | AI Model Owner | Judge score average of at least 4.0 and citation rate 100 percent | In use (dev) |
 | M-04 | Judge | Gateway, public data only, so Gemini `gemini-2.5-flash` is allowed as a second opinion; prompt `judge-v1` | Score answers | Evaluator | Agreement with human labels of at least 0.75 (within 1 point) | Planned |
 
 Every chat model call goes through the LLM gateway (ADR-011): the data's classification decides which models may receive it, user questions go only to Databricks-hosted models, and every call is logged to `gold.llm_call_log` without prompt or answer text. External models (Gemini today, a frontier model through an enterprise channel in production) are used only for data they are allowed to see.
@@ -52,7 +52,7 @@ A new model or prompt version can only go live if:
 2. Its scores are not worse than the current live version by more than 0.2 on average
 3. The change is in a PR with the eval results attached
 
-Prompts are files in `src/careplatform/prompts/` with a version in the file name. Changing a prompt means a new version, never an edit in place. Rollback means pointing config back to the previous version.
+Prompts are files in `config/prompts/` with a version in the file name. Changing a prompt means a new version, never an edit in place. Rollback means pointing config back to the previous version.
 
 ## 5. Answer policy
 
@@ -62,6 +62,8 @@ The app must:
 - Say "I could not find this in the loaded regulations" when retrieval returns nothing relevant, not guess
 - Show the load date of the data it used
 - Show the not-legal-advice line
+
+How each rule is enforced (ADR-012): citations are checked in code, and an answer with no valid citation is replaced by the not-found message; off-topic questions and repealed or not-in-force sections are answered without a model call; every answer records its route, model and gateway call id. Tested in `tests/test_rag.py`.
 
 ## 6. Incident types
 

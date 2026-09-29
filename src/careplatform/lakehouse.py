@@ -6,7 +6,7 @@ Why the schema comes from config/catalog.yaml:
     tries to write a column the catalog doesn't know about, the write fails.
     So the catalog and the physical table can never drift apart.
 
-Two backends, same functions (ADR-001, ADR-007):
+Three backends, same functions (ADR-001, ADR-007, ADR-013):
 
     local       Delta tables in ./data/lakehouse/<layer>/<table>, written with
                 the `deltalake` library. Raw files in ./data/landing.
@@ -16,6 +16,10 @@ Two backends, same functions (ADR-001, ADR-007):
                 /Volumes/<catalog>/bronze/landing. When a table is first
                 created, its description, column comments and tags are
                 published from catalog.yaml into Unity Catalog.
+
+    sql         The same Unity Catalog tables, through a SQL warehouse, for the
+                Databricks App (no Spark there). Read and append only: never
+                creates, overwrites or merges (sqlwarehouse.py).
 
 The pipelines only ever call read(), append(), upsert(), exists() and
 landing_root(). They never know which backend they're on.
@@ -28,7 +32,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow as pa
 
-from careplatform import config
+from careplatform import config, sqlwarehouse
 
 # catalog type -> Arrow type
 _TYPES = {
@@ -189,7 +193,14 @@ def _uc_create(name: str) -> None:
 
 # ---------------- the API the pipelines use ----------------
 
+def _no_sql(op: str) -> None:
+    if mode() == "sql":
+        raise RuntimeError(f"{op} is not allowed in sql mode: the app only reads and appends logs (ADR-013).")
+
+
 def exists(name: str) -> bool:
+    if mode() == "sql":
+        return sqlwarehouse.table_exists(uc_name(name))
     if mode() == "databricks":
         return _spark().catalog.tableExists(uc_name(name))
     try:
@@ -204,6 +215,8 @@ def read(name: str) -> pd.DataFrame:
     """Whole table as pandas. Returns an empty frame with the right columns if it doesn't exist yet."""
     if not exists(name):
         return schema_for(name).empty_table().to_pandas()
+    if mode() == "sql":
+        return sqlwarehouse.read(uc_name(name), schema_for(name))
     if mode() == "databricks":
         return _spark().table(uc_name(name)).toPandas()
     from deltalake import DeltaTable
@@ -213,6 +226,11 @@ def read(name: str) -> pd.DataFrame:
 def append(name: str, df: pd.DataFrame) -> int:
     if df.empty:
         return 0
+    if mode() == "sql":
+        if not exists(name):
+            raise RuntimeError(f"{uc_name(name)} does not exist. The app never creates tables; "
+                               "run the pipeline or job that owns it first.")
+        return sqlwarehouse.insert(uc_name(name), to_arrow(name, df))
     if mode() == "databricks":
         if not exists(name):
             _uc_create(name)
@@ -225,6 +243,7 @@ def append(name: str, df: pd.DataFrame) -> int:
 
 def overwrite(name: str, df: pd.DataFrame) -> int:
     """Replace the whole table. For derived tables that are rebuilt every run (silver.chunks)."""
+    _no_sql("overwrite")
     if mode() == "databricks":
         if not exists(name):
             _uc_create(name)
@@ -234,9 +253,10 @@ def overwrite(name: str, df: pd.DataFrame) -> int:
     write_deltalake(table_path(name), to_arrow(name, df), mode="overwrite")
     return len(df)
 
-    
+
 def upsert(name: str, df: pd.DataFrame) -> int:
     """Insert new rows, update rows whose primary key already exists."""
+    _no_sql("upsert")
     if df.empty:
         return 0
     pk = table_spec(name)["primary_key"]

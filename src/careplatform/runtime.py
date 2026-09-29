@@ -20,7 +20,7 @@ from careplatform import config
 
 def add_runtime_args(p: argparse.ArgumentParser) -> None:
     g = p.add_argument_group("runtime")
-    g.add_argument("--mode", choices=["local", "databricks", "fabric"],
+    g.add_argument("--mode", choices=["local", "databricks", "fabric", "sql"],
                    help="where tables live (default: settings.yaml lakehouse.mode)")
     g.add_argument("--catalog", help="Unity Catalog catalog in databricks mode")
     g.add_argument("--config-dir", help="folder holding settings.yaml, catalog.yaml, ...")

@@ -9,6 +9,7 @@ duckdb>=1.0
 pandas>=2.2
 pyarrow>=15.0
 requests>=2.31
+databricks-sdk>=0.30     # model serving auth (gateway, embeddings); Databricks jobs already have it
 pypdf>=4.0
 beautifulsoup4>=4.12
 tiktoken>=0.7

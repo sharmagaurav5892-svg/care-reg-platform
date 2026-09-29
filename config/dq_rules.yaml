@@ -257,6 +257,13 @@ rules:
     column: chunk_id
     description: No active embedding may belong to a chunk that is retired or flagged for PII. Otherwise search could return amended, repealed or personal text.
 
+  - id: DQ-G-011
+    table: gold.llm_call_log
+    dimension: validity
+    severity: critical
+    check: custom
+    column: data_classification
+    description: Every call must have gone to a model allowed for that data's classification, and restricted data to none. A breach means data left the platform against policy.
   # ---------------- OPS ----------------
   - id: DQ-O-002
     table: ops.dq_results

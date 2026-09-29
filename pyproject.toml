@@ -21,6 +21,7 @@ careplatform-publish-catalog = "careplatform.governance.publish_uc:main"
 careplatform-register = "careplatform.ingestion.register_landing:main"
 careplatform-silver = "careplatform.silver.build_silver:main"
 careplatform-embed = "careplatform.gold.embed_chunks:main"
+careplatform-gateway-smoke = "careplatform.gateway.smoke:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -9,7 +9,7 @@ resources:
 
       tasks:
         - task_key: publish_catalog
-          environment_key: default
+          environment_key: careplatform
           python_wheel_task:
             package_name: careplatform
             entry_point: careplatform-publish-catalog
@@ -20,7 +20,7 @@ resources:
         - task_key: register_bclaws
           depends_on:
             - task_key: publish_catalog
-          environment_key: default
+          environment_key: careplatform
           python_wheel_task:
             package_name: careplatform
             entry_point: careplatform-register
@@ -35,7 +35,7 @@ resources:
         - task_key: silver_bclaws
           depends_on:
             - task_key: register_bclaws
-          environment_key: default
+          environment_key: careplatform
           python_wheel_task:
             package_name: careplatform
             entry_point: careplatform-silver
@@ -49,7 +49,7 @@ resources:
         - task_key: gold_embeddings
           depends_on:
             - task_key: silver_bclaws
-          environment_key: default
+          environment_key: careplatform
           python_wheel_task:
             package_name: careplatform
             entry_point: careplatform-embed
@@ -58,7 +58,7 @@ resources:
                          --git-commit, "${bundle.git.commit}"]
 
       environments:
-        - environment_key: default
+        - environment_key: careplatform
           spec:
             environment_version: "2"
             dependencies:
@@ -77,3 +77,39 @@ resources:
       tags:
         project: care-reg-platform
         layer: bronze
+
+        
+    gateway_smoke:
+      name: care-reg gateway smoke test (${bundle.target})
+      description: Asks every configured chat model one fixed public question through the LLM gateway and logs the calls to gold.llm_call_log. Run by hand after a model or prompt change.
+
+      tasks:
+        - task_key: smoke
+          environment_key: careplatform
+          max_retries: 1             # a compute start blip only; model failures show in the output
+          min_retry_interval_millis: 60000
+          timeout_seconds: 600
+          python_wheel_task:
+            package_name: careplatform
+            entry_point: careplatform-gateway-smoke
+            parameters: [--mode, databricks, --catalog, "${var.catalog}",
+                         --config-dir, "${workspace.file_path}/config",
+                         --git-commit, "${bundle.git.commit}"]
+
+      environments:
+        - environment_key: careplatform
+          spec:
+            environment_version: "2"
+            dependencies:
+              - ../dist/*.whl
+
+      timeout_seconds: 1200
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+
+      max_concurrent_runs: 1
+      tags:
+        project: care-reg-platform
+        layer: ai
+        trigger: manual              # on demand only, never scheduled (tests/test_bundle.py)

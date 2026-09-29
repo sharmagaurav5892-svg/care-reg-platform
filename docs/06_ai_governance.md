@@ -9,11 +9,11 @@ Nothing goes into use without a row here.
 | ID | Component | Model / version | Purpose | Owner | Eval gate | Status |
 |----|-----------|-----------------|---------|-------|-----------|--------|
 | M-01 | Embeddings | Databricks-hosted `databricks-gte-large-en` (1024 dims), ADR-010 | Chunk and query vectors | AI Model Owner | Retrieval recall at 5 of at least 0.80 on gold set | In use (dev) |
-| M-02 | Entity extraction | Azure OpenAI `gpt-4.1-mini`, prompt `extract-v1` | Build graph from chunks | AI Model Owner | Schema validity 100 percent (DQ-G-003, DQ-G-005), spot check precision of at least 0.85 on 50 chunks | Planned |
-| M-03 | Answer generation | Azure OpenAI `gpt-4.1-mini`, prompt `answer-v1` | Answer user questions with citations | AI Model Owner | Judge score average of at least 4.0 and citation rate 100 percent | Planned |
-| M-04 | Judge | Azure OpenAI `gpt-4.1-mini`, prompt `judge-v1` | Score answers | Evaluator | Agreement with human labels of at least 0.75 (within 1 point) | Planned |
+| M-02 | Entity extraction | Via the LLM gateway (ADR-011), prompt `extract-v1` | Build graph from chunks | AI Model Owner | Schema validity 100 percent (DQ-G-003, DQ-G-005), spot check precision of at least 0.85 on 50 chunks | Planned |
+| M-03 | Answer generation | Gateway route: Databricks-hosted `databricks-meta-llama-3-3-70b-instruct`, fallback `databricks-gpt-oss-120b`, prompt `answer-v1` | Answer user questions with citations | AI Model Owner | Judge score average of at least 4.0 and citation rate 100 percent | Building |
+| M-04 | Judge | Gateway, public data only, so Gemini `gemini-2.5-flash` is allowed as a second opinion; prompt `judge-v1` | Score answers | Evaluator | Agreement with human labels of at least 0.75 (within 1 point) | Planned |
 
-All Azure OpenAI deployments: default content filters on, default abuse monitoring data retention. No fine-tuning. Customer data is not used to train the models under Azure OpenAI terms.
+Every chat model call goes through the LLM gateway (ADR-011): the data's classification decides which models may receive it, user questions go only to Databricks-hosted models, and every call is logged to `gold.llm_call_log` without prompt or answer text. External models (Gemini today, a frontier model through an enterprise channel in production) are used only for data they are allowed to see.
 
 ## 2. Map: intended use and limits
 

@@ -126,3 +126,12 @@ def vectors_have_configured_length(df: pd.DataFrame, rule: dict) -> CheckOutcome
 def no_active_vector_for_retired_chunk(df: pd.DataFrame, rule: dict) -> CheckOutcome:
     bad = int((~df["chunk_id"].isin(_wanted_chunk_ids())).sum()) if len(df) else 0
     return CheckOutcome(bad == 0, float(bad), 0.0, bad)
+
+
+@custom("DQ-G-011")
+def calls_respect_data_classification(df: pd.DataFrame, rule: dict) -> CheckOutcome:
+    """Every model call went to a model allowed for that data's classification (settings.yaml)."""
+    models = config.settings()["models"]["chat"]["models"]
+    allowed = {m: set(spec["allowed_data"]) - {"restricted"} for m, spec in models.items()}
+    bad = sum(1 for m, c in zip(df["model"], df["data_classification"]) if c not in allowed.get(m, set()))
+    return CheckOutcome(bad == 0, float(bad), 0.0, bad)

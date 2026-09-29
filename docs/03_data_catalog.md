@@ -23,7 +23,7 @@
 | [gold.chunk_embeddings](#goldchunk_embeddings) | gold | regulations | Public | 365 | one row per chunk per embedding model (active or retired) | 3 |
 | [gold.entities](#goldentities) | gold | regulations | Public | 365 | one row per entity mention per chunk | 1 |
 | [gold.relationships](#goldrelationships) | gold | regulations | Public | 365 | one row per relationship mention per chunk | 2 |
-| [gold.llm_call_log](#goldllm_call_log) | gold | ai_operations | Internal | 180 | one row per model call attempt | 1 |
+| [gold.llm_call_log](#goldllm_call_log) | gold | ai_operations | Internal | 180 | one row per model attempt (a fallback adds a second row for the same request) | 2 |
 | [gold.eval_questions](#goldeval_questions) | gold | evaluation | Internal | 1825 | one row per question per version | 1 |
 | [gold.eval_results](#goldeval_results) | gold | evaluation | Internal | 1825 | one row per question per eval run per pipeline variant | 2 |
 | [ops.run_log](#opsrun_log) | ops | platform | Internal | 1825 | one row per run | 1 |
@@ -277,13 +277,13 @@ Relationships between entities extracted from chunks.
 
 ## gold.llm_call_log
 
-One row per model call through the LLM gateway. No raw prompt text by default (ADR-004).
+One row per model attempt through the LLM gateway (ADR-011). Metrics only; never the prompt, the answer or a key (ADR-004).
 
 - **Owner:** AI Operations Owner  
 - **Steward:** AI Operations Steward  
 - **Classification:** Internal  
 - **Retention:** 180 days  
-- **Grain:** one row per model call attempt  
+- **Grain:** one row per model attempt (a fallback adds a second row for the same request)  
 - **Primary key:** call_id  
 - **Write mode:** append
 
@@ -291,24 +291,28 @@ One row per model call through the LLM gateway. No raw prompt text by default (A
 |--------|------|:--------:|-------------|
 | call_id | string | no | UUID |
 | called_at | timestamp | no | UTC |
-| app | string | no | rag | extraction | judge |
-| provider | string | no | azure_openai | fallback |
-| model | string | no | Deployment name |
+| run_id | string | no | Pipeline run or app session that made the call |
+| purpose | string | no | rag | judge | extraction | smoke |
+| provider | string | no | databricks | gemini |
+| model | string | no | Model or endpoint name from settings.yaml models.chat |
+| prompt_version | string | no | Versioned prompt used (config/prompts) |
+| data_classification | string | no | Classification of the data sent (docs/02). Decides which models were allowed |
 | prompt_tokens | int | yes | From the API response |
 | completion_tokens | int | yes | From the API response |
-| latency_ms | int | no | Wall clock time |
-| status | string | no | ok | error | timeout |
-| error_type | string | yes | Error class if status is not ok |
+| latency_ms | int | no | Wall clock time for this model |
+| status | string | no | ok | error |
+| error_type | string | yes | Error class when status is error |
 | retry_count | int | no | Retries before this result |
-| fallback_used | boolean | no | True if a fallback provider answered |
-| cost_usd | double | no | Calculated from token counts and config/pricing |
-| request_hash | string | no | SHA-256 of redacted prompt. Lets you spot repeats without storing text. |
+| fallback_used | boolean | no | True if this model was not the first one tried |
+| cost_usd | double | no | Tokens times settings.yaml pricing |
+| request_hash | string | no | SHA-256 of the messages. Spots repeats without storing text |
 
 **Data quality rules**
 
 | Rule | Severity | Dimension | Description |
 |------|----------|-----------|-------------|
 | DQ-G-006 | warning | validity | Negative cost means a pricing config error. |
+| DQ-G-011 | critical | validity | Every call must have gone to a model allowed for that data's classification, and restricted data to none. A breach means data left the platform against policy. |
 
 ## gold.eval_questions
 

@@ -181,28 +181,32 @@ tables:
   - name: gold.llm_call_log
     layer: gold
     domain: ai_operations
-    description: One row per model call through the LLM gateway. No raw prompt text by default (ADR-004).
+    description: One row per model attempt through the LLM gateway (ADR-011). Metrics only; never the prompt, the answer or a key (ADR-004).
     classification: Internal
     retention_days: 180
-    grain: one row per model call attempt
+    grain: one row per model attempt (a fallback adds a second row for the same request)
     primary_key: [call_id]
     write_mode: append
     columns:
-      - {name: call_id,           type: string,    nullable: false, description: UUID}
-      - {name: called_at,         type: timestamp, nullable: false, description: UTC}
-      - {name: app,               type: string,    nullable: false, description: rag | extraction | judge}
-      - {name: provider,          type: string,    nullable: false, description: azure_openai | fallback}
-      - {name: model,             type: string,    nullable: false, description: Deployment name}
-      - {name: prompt_tokens,     type: int,       nullable: true,  description: From the API response}
-      - {name: completion_tokens, type: int,       nullable: true,  description: From the API response}
-      - {name: latency_ms,        type: int,       nullable: false, description: Wall clock time}
-      - {name: status,            type: string,    nullable: false, description: ok | error | timeout}
-      - {name: error_type,        type: string,    nullable: true,  description: Error class if status is not ok}
-      - {name: retry_count,       type: int,       nullable: false, description: Retries before this result}
-      - {name: fallback_used,     type: boolean,   nullable: false, description: True if a fallback provider answered}
-      - {name: cost_usd,          type: double,    nullable: false, description: Calculated from token counts and config/pricing}
-      - {name: request_hash,      type: string,    nullable: false, description: SHA-256 of redacted prompt. Lets you spot repeats without storing text.}
-
+      - {name: call_id,             type: string,    nullable: false, description: UUID}
+      - {name: called_at,           type: timestamp, nullable: false, description: UTC}
+      - {name: run_id,              type: string,    nullable: false, description: Pipeline run or app session that made the call}
+      - {name: purpose,             type: string,    nullable: false, description: "rag | judge | extraction | smoke"}
+      - {name: provider,            type: string,    nullable: false, description: "databricks | gemini"}
+      - {name: model,               type: string,    nullable: false, description: Model or endpoint name from settings.yaml models.chat}
+      - {name: prompt_version,      type: string,    nullable: false, description: Versioned prompt used (config/prompts), so every answer traces to its exact instructions}
+      - {name: data_classification, type: string,    nullable: false, description: Classification of the data sent (docs/02). Decides which models were allowed}
+      - {name: prompt_tokens,       type: int,       nullable: true,  description: From the API response}
+      - {name: completion_tokens,   type: int,       nullable: true,  description: From the API response, including reasoning tokens}
+      - {name: latency_ms,          type: int,       nullable: false, description: Wall clock time for this model, retries included}
+      - {name: status,              type: string,    nullable: false, description: "ok | error"}
+      - {name: error_type,          type: string,    nullable: true,  description: Error class when status is error}
+      - {name: retry_count,         type: int,       nullable: false, description: Retries before this result}
+      - {name: fallback_used,       type: boolean,   nullable: false, description: True if this model was not the first one tried}
+      - {name: cost_usd,            type: double,    nullable: false, description: Tokens times settings.yaml pricing}
+      - {name: request_hash,        type: string,    nullable: false, description: SHA-256 of the messages. Spots repeats without storing text}
+  
+  
   - name: gold.eval_questions
     layer: gold
     domain: evaluation

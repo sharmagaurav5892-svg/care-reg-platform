@@ -79,6 +79,20 @@ models:
     timeout_seconds: 60
     max_retries: 1                      # one quick retry, then fall back (a user is waiting)
     daily_token_budget: 200000          # over this, the gateway refuses to call
+    
+    # Answer pipeline (ADR-012): how questions are answered from the law sections.
+rag:
+  prompt_version: answer-v1          # file config/prompts/answer-v1.md; a new version = a new file
+  top_k: 5                           # sections given to the model per question
+  candidates: 20                     # taken from each search (meaning, keyword) before merging
+  rrf_k: 60                          # merge constant for reciprocal rank fusion (standard value)
+  min_vector_score: 0.55             # best meaning match below this = off-topic: "not found", no model call
+                                     # (measured 2026Select-String -Path config\settings.yaml -Pattern "^rag:"-09-27: off-topic 0.505, real questions 0.72 to 0.80)
+  max_context_chars: 16000           # cap on law text sent per question (about 4,000 tokens)
+  laws:                              # names people use in questions, per source_id
+    bc_ccala_2002: [community care and assisted living act, ccala, the act]
+    bc_reg_96_2009: [residential care regulation, 96/2009]
+    bc_reg_189_2019: [assisted living regulation, 189/2019]
 
 graph:
   entity_types: [Regulation, Section, Requirement, HomeType, CareService, Role, Penalty, Authority]

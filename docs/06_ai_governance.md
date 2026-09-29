@@ -52,7 +52,7 @@ A new model or prompt version can only go live if:
 2. Its scores are not worse than the current live version by more than 0.2 on average
 3. The change is in a PR with the eval results attached
 
-Prompts are files in `src/careplatform/prompts/` with a version in the file name. Changing a prompt means a new version, never an edit in place. Rollback means pointing config back to the previous version.
+Prompts are files in `config/prompts/` with a version in the file name. Changing a prompt means a new version, never an edit in place. Rollback means pointing config back to the previous version.
 
 ## 5. Answer policy
 

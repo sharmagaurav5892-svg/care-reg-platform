@@ -1,0 +1,90 @@
+# The web app (ADR-013). Deployed by the bundle like the jobs; started with
+#   databricks bundle run care_reg_app -t dev
+#
+# It runs as its own service principal (created by Databricks with the app). Everything
+# it may touch is listed below, with the lowest permission that works (least privilege):
+#   compute   the SQL warehouse (can use: run queries, not manage it)
+#   models    the 3 Databricks-hosted endpoints the answer pipeline calls (can query)
+#   data      SELECT on what it searches; MODIFY only on the three log tables it appends to
+# No keys: the SDK picks up the app's own credentials, and resource values come in as env vars.
+
+resources:
+  apps:
+    care_reg_app:
+      name: care-reg-ask-${bundle.target}
+      description: Ask questions about BC seniors care law. Cited answers from the loaded law through the LLM gateway (ADR-011, ADR-012, ADR-013).
+      source_code_path: ..            # the synced repo: app/app.py, src/, config/ (prompts, settings)
+
+      config:
+        command: ["streamlit", "run", "app/app.py"]
+        env:
+          - name: CAREPLATFORM_LAKEHOUSE_MODE
+            value: sql                          # read and append through the SQL warehouse only
+          - name: CAREPLATFORM_CATALOG
+            value: ${var.catalog}               # care_reg_dev in dev, care_reg_prod in prod
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse           # the id of the resource below, never hardcoded
+          - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+            value: "false"                      # no usage data to a third party
+
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+
+        - name: llm-primary
+          serving_endpoint:
+            name: databricks-meta-llama-3-3-70b-instruct
+            permission: CAN_QUERY
+        - name: llm-fallback
+          serving_endpoint:
+            name: databricks-gpt-oss-120b
+            permission: CAN_QUERY
+        - name: embeddings
+          serving_endpoint:
+            name: databricks-gte-large-en
+            permission: CAN_QUERY
+
+        # read: what the answer pipeline searches, and the call log (for the daily budget)
+        - name: read-chunks
+          uc_securable:
+            securable_full_name: ${var.catalog}.silver.chunks
+            securable_type: TABLE
+            permission: SELECT
+        - name: read-units
+          uc_securable:
+            securable_full_name: ${var.catalog}.silver.document_units
+            securable_type: TABLE
+            permission: SELECT
+        - name: read-vectors
+          uc_securable:
+            securable_full_name: ${var.catalog}.gold.chunk_embeddings
+            securable_type: TABLE
+            permission: SELECT
+        - name: read-call-log
+          uc_securable:
+            securable_full_name: ${var.catalog}.gold.llm_call_log
+            securable_type: TABLE
+            permission: SELECT
+
+        # write: append-only logs (the code refuses create, overwrite and merge in sql mode)
+        - name: write-call-log
+          uc_securable:
+            securable_full_name: ${var.catalog}.gold.llm_call_log
+            securable_type: TABLE
+            permission: MODIFY
+        - name: write-api-log
+          uc_securable:
+            securable_full_name: ${var.catalog}.ops.api_call_log
+            securable_type: TABLE
+            permission: MODIFY
+        - name: write-dq-results
+          uc_securable:
+            securable_full_name: ${var.catalog}.ops.dq_results
+            securable_type: TABLE
+            permission: MODIFY
+
+      permissions:
+        - level: CAN_USE
+          user_name: ${workspace.current_user.userName}

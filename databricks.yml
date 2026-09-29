@@ -37,7 +37,11 @@ variables:
   catalog:
     description: Unity Catalog catalog for this environment (created once by infra/bootstrap_catalogs.sql)
     default: care_reg_dev
-
+  warehouse_id:
+    description: SQL warehouse the app queries. Looked up by name at deploy time, so no id is kept in the repo.
+    lookup:
+      warehouse: Serverless Starter Warehouse
+      
 targets:
   # One Free Edition workspace, two catalogs. In a company, dev and prod would be
   # separate workspaces; the bundle would only change the host below.

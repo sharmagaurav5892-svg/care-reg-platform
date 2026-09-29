@@ -47,5 +47,5 @@ An app has no Spark, so it cannot use the `databricks` lakehouse mode.
 - Good: the same code and prompts as the tested pipeline; the app adds no answer logic.
 - Bad: on Free Edition the app stops after 24 hours and must be started before a demo.
 - Bad: every question writes to three tables through the warehouse (a few seconds after the answer is shown); fine for low volume, a queue would be needed at scale.
-- Bad: whether table resources also grant `USE CATALOG` / `USE SCHEMA` is confirmed on first deploy; if not, a small grants script is added.
+- Confirmed on first deploy (2026-09-29): the table resources were enough; no separate USE CATALOG / USE SCHEMA grants were needed. The app wrote its first audit row to gold.llm_call_log (llama, confidential, answer-v1).
 - Neutral: the app is shared only with the deploying user by default (`permissions` in `app.yml`); sharing with others is an explicit change.
